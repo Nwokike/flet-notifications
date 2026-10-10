@@ -108,17 +108,19 @@ void main() {
     test("returns events in key order and removes them", () async {
       final older = responseToEvent(_response(payload: "first"));
       final newer = responseToEvent(_response(payload: "second"));
+      // The store contract returns keys with the legacy "flutter." prefix
+      // (the real method-channel store does the same).
       store.setValue(
         "String",
-        "flet_notifications_queue_100-1",
+        "flutter.flet_notifications_queue_100-1",
         jsonEncode(older),
       );
       store.setValue(
         "String",
-        "flet_notifications_queue_200-2",
+        "flutter.flet_notifications_queue_200-2",
         jsonEncode(newer),
       );
-      store.setValue("String", "unrelated_key", "keep me");
+      store.setValue("String", "flutter.unrelated_key", "keep me");
 
       // Populate the store first: the SharedPreferences instance snapshots
       // its keys at construction.
@@ -128,10 +130,12 @@ void main() {
       expect(drained.first["payload"], "first");
       expect(drained.last["payload"], "second");
       expect(
-        store.values.keys.where((k) => k.startsWith("flet_notifications_queue_")),
+        prefs.getKeys().where(
+          (k) => k.startsWith("flet_notifications_queue_"),
+        ),
         isEmpty,
       );
-      expect(store.values["unrelated_key"], "keep me");
+      expect(prefs.getString("unrelated_key"), "keep me");
     });
 
     test("empty queue yields empty list", () async {
@@ -140,10 +144,16 @@ void main() {
     });
 
     test("unreadable entries are dropped, not fatal", () async {
+      store.setValue(
+        "String",
+        "flutter.flet_notifications_queue_1-1",
+        "not json",
+      );
       final prefs = await SharedPreferences.getInstance();
-      store.setValue("String", "flet_notifications_queue_1-1", "not json");
       final drained = await drainTapQueue(prefs);
       expect(drained, isEmpty);
+      // The bad entry is removed rather than left to wedge the queue.
+      expect(prefs.getKeys(), isNot(contains("flet_notifications_queue_1-1")));
     });
   });
 
