@@ -3,6 +3,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flet/flet.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
@@ -16,6 +17,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'background_handler.dart';
 import 'parsers.dart';
+import 'scheduling.dart';
 
 class LocalNotificationsService extends FletService {
   LocalNotificationsService({required super.control});
@@ -204,8 +206,35 @@ class LocalNotificationsService extends FletService {
         await _plugin?.cancelAll();
         return "ok";
 
+      case "schedule":
+        return await _schedule(args);
+
+      case "periodically_show":
+        return await _periodicallyShow(args);
+
+      case "cancel_pending":
+        await _plugin?.cancelAllPendingNotifications();
+        return "ok";
+
+      case "get_pending":
+        return await _getPending();
+
       case "request_permissions":
         return (await _requestPermissions()) ? "true" : "false";
+
+      case "can_schedule_exact_notifications":
+        final android = _androidPlugin;
+        if (android == null) return "true";
+        return (await android.canScheduleExactNotifications() ?? false)
+            ? "true"
+            : "false";
+
+      case "request_exact_alarm_permission":
+        final android = _androidPlugin;
+        if (android == null) return "false";
+        return (await android.requestExactAlarmsPermission() ?? false)
+            ? "true"
+            : "false";
 
       default:
         throw Exception("Unknown LocalNotifications method: $name");
@@ -237,6 +266,102 @@ class LocalNotificationsService extends FletService {
       return "error:show_failed:$e";
     }
   }
+
+  Future<String> _schedule(dynamic args) async {
+    try {
+      final map = args as Map;
+      final id = map["id"] as int;
+      final actions = parseActions(map["actions"]);
+      await _plugin!.zonedSchedule(
+        id: id,
+        title: map["title"] as String?,
+        body: map["body"] as String?,
+        scheduledDate: parseWhen(map, tz.local),
+        notificationDetails: await _buildNotificationDetails(
+          id: id,
+          actions: actions,
+        ),
+        androidScheduleMode: parseScheduleMode(map["schedule_mode"] as String?),
+        payload: map["payload"] as String? ?? "",
+        matchDateTimeComponents: parseMatchComponents(
+          map["match_components"] as String?,
+        ),
+      );
+      return "ok";
+    } on FormatException catch (e) {
+      return "error:invalid_action:${e.message}";
+    } catch (e) {
+      return "error:schedule_failed:$e";
+    }
+  }
+
+  Future<String> _periodicallyShow(dynamic args) async {
+    try {
+      final map = args as Map;
+      final id = map["id"] as int;
+      final actions = parseActions(map["actions"]);
+      final notificationDetails = await _buildNotificationDetails(
+        id: id,
+        actions: actions,
+      );
+      final scheduleMode = parseScheduleMode(map["schedule_mode"] as String?);
+      final title = map["title"] as String?;
+      final body = map["body"] as String?;
+      final payload = map["payload"] as String? ?? "";
+      final durationSeconds = map["repeat_duration_seconds"] as int?;
+      if (durationSeconds != null) {
+        await _plugin!.periodicallyShowWithDuration(
+          id: id,
+          title: title,
+          body: body,
+          payload: payload,
+          notificationDetails: notificationDetails,
+          repeatDurationInterval: Duration(seconds: durationSeconds),
+          androidScheduleMode: scheduleMode,
+        );
+        return "ok";
+      }
+      await _plugin!.periodicallyShow(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
+        notificationDetails: notificationDetails,
+        repeatInterval: parseRepeatInterval(map["repeat_interval"] as String?),
+        androidScheduleMode: scheduleMode,
+      );
+      return "ok";
+    } on FormatException catch (e) {
+      return "error:invalid_action:${e.message}";
+    } catch (e) {
+      return "error:schedule_failed:$e";
+    }
+  }
+
+  Future<String> _getPending() async {
+    try {
+      final pending = await _plugin!.pendingNotificationRequests();
+      return jsonEncode(
+        pending
+            .map(
+              (p) => {
+                "id": p.id,
+                "title": p.title,
+                "body": p.body,
+                "payload": p.payload,
+              },
+            )
+            .toList(),
+      );
+    } catch (e) {
+      return "error:query_failed:$e";
+    }
+  }
+
+  fln.AndroidFlutterLocalNotificationsPlugin? get _androidPlugin =>
+      _plugin?.resolvePlatformSpecificImplementation<
+        fln.AndroidFlutterLocalNotificationsPlugin
+      >();
 
   // ── Notification details construction ───────────────────────────────
 
@@ -360,10 +485,7 @@ class LocalNotificationsService extends FletService {
   // ── Permissions ─────────────────────────────────────────────────────
 
   Future<bool> _requestPermissions() async {
-    final android =
-        _plugin?.resolvePlatformSpecificImplementation<
-          fln.AndroidFlutterLocalNotificationsPlugin
-        >();
+    final android = _androidPlugin;
     if (android != null) {
       return await android.requestNotificationsPermission() ?? false;
     }

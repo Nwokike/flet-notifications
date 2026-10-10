@@ -1,16 +1,25 @@
+import 'dart:convert';
+
 import 'package:flet/flet.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flet_notifications/src/notifications_service.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 /// Fake Android platform implementation recording what the service sends.
 class _FakeAndroidPlugin extends fln.AndroidFlutterLocalNotificationsPlugin {
   final List<Map<String, Object?>> shown = [];
+  final List<Map<String, Object?>> scheduled = [];
+  final List<Map<String, Object?>> periodic = [];
   final List<int> cancelled = [];
   int cancelAllCalls = 0;
+  int cancelPendingCalls = 0;
   int permissionRequests = 0;
   bool permissionResult = true;
+  bool exactAlarmsAllowed = true;
+  int exactAlarmRequests = 0;
+  final List<fln.PendingNotificationRequest> pending = [];
 
   @override
   Future<bool> initialize({
@@ -40,6 +49,72 @@ class _FakeAndroidPlugin extends fln.AndroidFlutterLocalNotificationsPlugin {
   }
 
   @override
+  Future<void> zonedSchedule({
+    required int id,
+    String? title,
+    String? body,
+    required tz.TZDateTime scheduledDate,
+    String? payload,
+    fln.DateTimeComponents? matchDateTimeComponents,
+    fln.AndroidNotificationDetails? notificationDetails,
+    fln.AndroidScheduleMode scheduleMode =
+        fln.AndroidScheduleMode.exact,
+  }) async {
+    scheduled.add({
+      "id": id,
+      "title": title,
+      "body": body,
+      "payload": payload,
+      "scheduledDate": scheduledDate,
+      "matchDateTimeComponents": matchDateTimeComponents,
+      "scheduleMode": scheduleMode,
+      "details": notificationDetails,
+    });
+  }
+
+  @override
+  Future<void> periodicallyShow({
+    required int id,
+    String? title,
+    String? body,
+    required fln.RepeatInterval repeatInterval,
+    fln.AndroidNotificationDetails? notificationDetails,
+    String? payload,
+    fln.AndroidScheduleMode scheduleMode = fln.AndroidScheduleMode.exact,
+  }) async {
+    periodic.add({
+      "id": id,
+      "title": title,
+      "body": body,
+      "payload": payload,
+      "repeatInterval": repeatInterval,
+      "scheduleMode": scheduleMode,
+      "details": notificationDetails,
+    });
+  }
+
+  @override
+  Future<void> periodicallyShowWithDuration({
+    required int id,
+    String? title,
+    String? body,
+    required Duration repeatDurationInterval,
+    fln.AndroidNotificationDetails? notificationDetails,
+    String? payload,
+    fln.AndroidScheduleMode scheduleMode = fln.AndroidScheduleMode.exact,
+  }) async {
+    periodic.add({
+      "id": id,
+      "title": title,
+      "body": body,
+      "payload": payload,
+      "repeatDurationInterval": repeatDurationInterval,
+      "scheduleMode": scheduleMode,
+      "details": notificationDetails,
+    });
+  }
+
+  @override
   Future<void> cancel({required int id, String? tag}) async {
     cancelled.add(id);
   }
@@ -50,9 +125,30 @@ class _FakeAndroidPlugin extends fln.AndroidFlutterLocalNotificationsPlugin {
   }
 
   @override
+  Future<void> cancelAllPendingNotifications() async {
+    cancelPendingCalls++;
+  }
+
+  @override
+  Future<List<fln.PendingNotificationRequest>> pendingNotificationRequests() async {
+    return pending;
+  }
+
+  @override
   Future<bool?> requestNotificationsPermission() async {
     permissionRequests++;
     return permissionResult;
+  }
+
+  @override
+  Future<bool?> canScheduleExactNotifications() async {
+    return exactAlarmsAllowed;
+  }
+
+  @override
+  Future<bool?> requestExactAlarmsPermission() async {
+    exactAlarmRequests++;
+    return true;
   }
 }
 
@@ -70,6 +166,14 @@ LocalNotificationsService _makeService({Map<String, dynamic>? properties}) {
     backend: backend,
   );
   return LocalNotificationsService(control: control);
+}
+
+Map<String, Object?> _whenIso(String iso, {String? timeZone}) {
+  return {
+    "iso": iso,
+    "utc_offset_seconds": null,
+    "time_zone": timeZone,
+  };
 }
 
 void main() {
@@ -181,11 +285,179 @@ void main() {
     expect(await service.invokeMethod("request_permissions", null), "false");
   });
 
-  test("unknown method throws", () {
+  // ── Scheduling ────────────────────────────────────────────────────────
+
+  test("schedule converts naive wall-clock time in the target zone",
+      () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("schedule", {
+      "id": 5,
+      "title": "Reminder",
+      "body": "Later",
+      "payload": "",
+      "actions": null,
+      "when": _whenIso("2030-01-15T09:30:00", timeZone: "Africa/Lagos"),
+      "repeat_interval": null,
+      "match_components": "time",
+      "schedule_mode": "exactAllowWhileIdle",
+    });
+    expect(result, "ok");
+    final call = plugin.scheduled.single;
+    final date = call["scheduledDate"] as tz.TZDateTime;
+    expect(date.year, 2030);
+    expect(date.month, 1);
+    expect(date.day, 15);
+    expect(date.hour, 9);
+    expect(date.minute, 30);
+    expect(date.location.name, "Africa/Lagos");
+    expect(
+      call["matchDateTimeComponents"],
+      fln.DateTimeComponents.time,
+    );
+    expect(call["scheduleMode"], fln.AndroidScheduleMode.exactAllowWhileIdle);
+  });
+
+  test("schedule preserves the instant for aware datetimes", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("schedule", {
+      "id": 6,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "when": {
+        "iso": "2030-06-01T12:00:00+01:00",
+        "utc_offset_seconds": 3600,
+        "time_zone": null,
+      },
+      "repeat_interval": null,
+      "match_components": null,
+      "schedule_mode": "exact",
+    });
+    expect(result, "ok");
+    final date =
+        plugin.scheduled.single["scheduledDate"] as tz.TZDateTime;
+    // 12:00 +01:00 is 11:00 UTC — the instant must survive the conversion.
+    expect(date.hour, 11);
+    expect(date.minute, 0);
+    expect(plugin.scheduled.single["scheduleMode"], fln.AndroidScheduleMode.exact);
+  });
+
+  test("schedule accepts a delay from now", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("schedule", {
+      "id": 7,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "when": {"delay_seconds": 30, "time_zone": null},
+      "repeat_interval": null,
+      "match_components": null,
+      "schedule_mode": "exactAllowWhileIdle",
+    });
+    expect(result, "ok");
+    final date =
+        plugin.scheduled.single["scheduledDate"] as tz.TZDateTime;
+    final delta = date.difference(tz.TZDateTime.now(tz.local));
+    expect(delta.inSeconds.abs(), greaterThan(25));
+  });
+
+  test("schedule failure returns an error string", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("schedule", {
+      "id": 8,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "when": {"nonsense": true},
+      "repeat_interval": null,
+      "match_components": null,
+      "schedule_mode": "exactAllowWhileIdle",
+    });
+    expect(result, startsWith("error:schedule_failed:"));
+    expect(plugin.scheduled, isEmpty);
+  });
+
+  test("periodically_show maps the repeat interval", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("periodically_show", {
+      "id": 9,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "repeat_interval": "daily",
+      "schedule_mode": "exactAllowWhileIdle",
+      "repeat_duration_seconds": null,
+    });
+    expect(result, "ok");
+    final call = plugin.periodic.single;
+    expect(call["id"], 9);
+    expect(call["repeatInterval"], fln.RepeatInterval.daily);
+  });
+
+  test("periodically_show with a custom duration", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("periodically_show", {
+      "id": 10,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "repeat_interval": "daily",
+      "schedule_mode": "exactAllowWhileIdle",
+      "repeat_duration_seconds": 900,
+    });
+    expect(result, "ok");
+    final call = plugin.periodic.single;
+    expect(
+      call["repeatDurationInterval"],
+      const Duration(seconds: 900),
+    );
+  });
+
+  test("cancel_pending routes to the platform", () async {
+    final service = _makeService();
+    expect(await service.invokeMethod("cancel_pending", null), "ok");
+    expect(plugin.cancelPendingCalls, 1);
+  });
+
+  test("get_pending returns JSON records", () async {
+    plugin.pending.add(
+      fln.PendingNotificationRequest(3, "Pending", "Body", "p"),
+    );
+    final service = _makeService();
+    final result = await service.invokeMethod("get_pending", null);
+    final decoded = result is String ? jsonDecode(result) : result;
+    expect(decoded, isA<List>());
+    final first = (decoded as List).single as Map;
+    expect(first["id"], 3);
+    expect(first["title"], "Pending");
+    expect(first["payload"], "p");
+  });
+
+  test("exact-alarm probes and request route to Android", () async {
     final service = _makeService();
     expect(
-      () => service.invokeMethod("nope", null),
-      throwsA(isA<Exception>()),
+      await service.invokeMethod("can_schedule_exact_notifications", null),
+      "true",
     );
+    plugin.exactAlarmsAllowed = false;
+    expect(
+      await service.invokeMethod("can_schedule_exact_notifications", null),
+      "false",
+    );
+    expect(
+      await service.invokeMethod("request_exact_alarm_permission", null),
+      "true",
+    );
+    expect(plugin.exactAlarmRequests, 1);
+  });
+
+  test("unknown method throws", () {
+    final service = _makeService();
+    expect(() => service.invokeMethod("nope", null), throwsA(isA<Exception>()));
   });
 }

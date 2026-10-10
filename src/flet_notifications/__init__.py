@@ -11,15 +11,25 @@ from flet_notifications.base import (
     NotificationEvent,
     ResponseType,
 )
+from flet_notifications.events import PendingNotification
 from flet_notifications.local_notifications import LocalNotifications
+from flet_notifications.types import (
+    AndroidScheduleMode,
+    DateTimeComponents,
+    RepeatInterval,
+)
 
 __version__ = "0.1.0"
 
 __all__ = [
+    "AndroidScheduleMode",
+    "DateTimeComponents",
     "LocalNotifications",
     "NotificationAction",
     "NotificationActionInput",
     "NotificationError",
     "NotificationEvent",
+    "PendingNotification",
+    "RepeatInterval",
     "ResponseType",
 ]

@@ -30,11 +30,15 @@ def test_control_type_string():
 
 def test_exports():
     assert fn.__all__ == [
+        "AndroidScheduleMode",
+        "DateTimeComponents",
         "LocalNotifications",
         "NotificationAction",
         "NotificationActionInput",
         "NotificationError",
         "NotificationEvent",
+        "PendingNotification",
+        "RepeatInterval",
         "ResponseType",
     ]
     assert fn.__version__ == "0.1.0"
