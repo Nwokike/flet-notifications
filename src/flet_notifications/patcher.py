@@ -106,10 +106,7 @@ def patch_gradle(gradle_path: Path) -> list[str]:
     text = gradle_path.read_text(encoding="utf-8")
     changed: list[str] = []
 
-    if (
-        "isCoreLibraryDesugaringEnabled" not in text
-        and "compileOptions {" in text
-    ):
+    if "isCoreLibraryDesugaringEnabled" not in text and "compileOptions {" in text:
         text = text.replace(
             "compileOptions {",
             "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
