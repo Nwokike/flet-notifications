@@ -2,9 +2,14 @@ import 'package:flet_notifications/src/scheduling.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 void main() {
+  setUpAll(() {
+    // getLocation() requires the database, which the service loads at init.
+    tz.initializeTimeZones();
+  });
   group("parseWhen", () {
     test("naive wall clock in the target zone", () {
       final date = parseWhen({
