@@ -35,6 +35,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
+      - name: Build extension wheel
+        run: uv build --wheel --out-dir wheels/ .
+
       - name: Install dependencies (incl. dev group)
         run: |
           uv pip install --system -e .
@@ -101,8 +104,16 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Build extension wheel
+        run: uv build --wheel --out-dir wheels/ .
+
+
       - name: Build Windows portable
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/wheels
         working-directory: examples/flet_notifications_example
+        env:
+          PIP_FIND_LINKS: ${ github.workspace }/wheels
         run: |
           uv run flet build windows --yes --project notifications `
             --product "Flet Notifications Example" --org ng.kiri `
@@ -130,12 +141,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
+      - name: Build extension wheel
+        run: uv build --wheel --out-dir wheels/ .
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
       - name: First flet build pass (desugaring failure tolerated)
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/wheels
         working-directory: examples/flet_notifications_example
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/wheels
         run: |
           set +e
           uv run flet build apk --yes --project notifications \
@@ -178,12 +196,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
+      - name: Build extension wheel
+        run: uv build --wheel --out-dir wheels/ .
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
       - name: First flet build pass (desugaring failure tolerated)
         working-directory: examples/flet_notifications_example
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/wheels
         run: |
           set +e
           uv run flet build aab --yes --project notifications \
@@ -218,6 +241,10 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Build extension wheel
+        run: uv build --wheel --out-dir wheels/ .
+
+
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -226,7 +253,11 @@ jobs:
             rpm ruby ruby-dev
           sudo gem install --no-document fpm
       - name: Build Linux bundle
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/wheels
         working-directory: examples/flet_notifications_example
+        env:
+          PIP_FIND_LINKS: ${ github.workspace }/wheels
         run: |
           uv run flet build linux --yes --project notifications \
             --product "Flet Notifications Example" --org ng.kiri \
@@ -264,8 +295,16 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Build extension wheel
+        run: uv build --wheel --out-dir wheels/ .
+
+
       - name: Build macOS app
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/wheels
         working-directory: examples/flet_notifications_example
+        env:
+          PIP_FIND_LINKS: ${ github.workspace }/wheels
         run: |
           uv run flet build macos --yes --project notifications \
             --product "Flet Notifications Example" --org ng.kiri \
@@ -297,8 +336,16 @@ jobs:
         with:
           python-version: '3.14'
 
+      - name: Build extension wheel
+        run: uv build --wheel --out-dir wheels/ .
+
+
       - name: Build web bundle
+        env:
+          PIP_FIND_LINKS: ${{ github.workspace }}/wheels
         working-directory: examples/flet_notifications_example
+        env:
+          PIP_FIND_LINKS: ${ github.workspace }/wheels
         run: |
           uv run flet build web --yes --project notifications \
             --product "Flet Notifications Example" --org ng.kiri \
