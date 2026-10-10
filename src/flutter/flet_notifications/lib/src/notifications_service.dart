@@ -9,8 +9,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-// The timezone database lives in the data library since timezone 0.10.
+// Mirrors the plugin's own example: the database lives in the data library
+// since timezone 0.10; both libraries share the `tz` prefix.
 import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 import 'background_handler.dart';
 import 'parsers.dart';

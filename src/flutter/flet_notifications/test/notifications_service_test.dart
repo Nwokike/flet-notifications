@@ -100,7 +100,7 @@ void main() {
     expect(details, isNotNull);
     expect(details!.channelId, "flet_notifications");
     expect(details.channelName, "Notifications");
-    expect(details.actions, isEmpty);
+    expect(details.actions ?? const [], isEmpty);
   });
 
   test("show maps actions onto AndroidNotificationAction", () async {
@@ -137,7 +137,7 @@ void main() {
     expect(result, "ok");
     final details =
         plugin.shown.single["details"] as fln.AndroidNotificationDetails;
-    final actions = details.actions;
+    final actions = details.actions!;
     expect(actions, hasLength(2));
     expect(actions[0].id, "open");
     expect(actions[0].title, "Open");
