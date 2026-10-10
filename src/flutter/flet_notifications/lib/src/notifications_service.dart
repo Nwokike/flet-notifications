@@ -742,7 +742,7 @@ class LocalNotificationsService extends FletService {
     final android = _androidPlugin;
     if (android == null) return "[]";
     try {
-      final channels = await android.getNotificationChannels() ?? const [];
+      final channels = await android.getNotificationChannels();
       return jsonEncode(
         channels
             .map(
