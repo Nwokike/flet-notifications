@@ -106,7 +106,6 @@ void main() {
 
   group("drainTapQueue", () {
     test("returns events in key order and removes them", () async {
-      final prefs = await SharedPreferences.getInstance();
       final older = responseToEvent(_response(payload: "first"));
       final newer = responseToEvent(_response(payload: "second"));
       store.setValue(
@@ -121,6 +120,9 @@ void main() {
       );
       store.setValue("String", "unrelated_key", "keep me");
 
+      // Populate the store first: the SharedPreferences instance snapshots
+      // its keys at construction.
+      final prefs = await SharedPreferences.getInstance();
       final drained = await drainTapQueue(prefs);
       expect(drained, hasLength(2));
       expect(drained.first["payload"], "first");
