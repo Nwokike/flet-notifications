@@ -30,13 +30,9 @@ class _FakeStore extends SharedPreferencesStorePlatform {
   }
 
   @override
-  Map<String, Object>? getAll(
-    List<String> keys,
-    Map<String, Object> defaults,
-  ) {
+  Future<Map<String, Object>> getAll() async {
     return {
-      for (final key in keys)
-        if (values.containsKey(key)) key: values[key]!,
+      for (final entry in values.entries) entry.key: entry.value,
     };
   }
 }
@@ -64,6 +60,7 @@ void main() {
   setUp(() {
     store = _FakeStore();
     SharedPreferencesStorePlatform.instance = store;
+    SharedPreferences.resetStatic();
   });
 
   group("responseToEvent", () {

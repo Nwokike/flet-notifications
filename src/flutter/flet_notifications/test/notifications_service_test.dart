@@ -137,7 +137,7 @@ void main() {
     expect(result, "ok");
     final details =
         plugin.shown.single["details"] as fln.AndroidNotificationDetails;
-    final actions = details.actions!;
+    final actions = details.actions;
     expect(actions, hasLength(2));
     expect(actions[0].id, "open");
     expect(actions[0].title, "Open");
@@ -146,7 +146,7 @@ void main() {
     expect(actions[1].showsUserInterface, isFalse);
     expect(actions[1].allowGeneratedReplies, isTrue);
     expect(actions[1].inputs, hasLength(1));
-    expect(actions[1].inputs!.single.label, "Say");
+    expect(actions[1].inputs.single.label, "Say");
   });
 
   test("show with invalid action returns an error string", () async {
@@ -168,7 +168,7 @@ void main() {
     final service = _makeService();
     expect(await service.invokeMethod("cancel", {"id": 9}), "ok");
     expect(plugin.cancelled, [9]);
-    expect(await service.invokeMethod("cancel_all"), "ok");
+    expect(await service.invokeMethod("cancel_all", null), "ok");
     expect(plugin.cancelAllCalls, 1);
   });
 

@@ -9,7 +9,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/timezone.dart' as tz;
+// The timezone database lives in the data library since timezone 0.10.
+import 'package:timezone/data/latest_all.dart' as tz;
 
 import 'background_handler.dart';
 import 'parsers.dart';
@@ -59,15 +60,15 @@ class LocalNotificationsService extends FletService {
       // load, notifications still show.
       try {
         tz.initializeTimeZones();
-        final name = await FlutterTimezone.getLocalTimezone();
-        tz.setLocalLocation(tz.getLocation(name));
+        final info = await FlutterTimezone.getLocalTimezone();
+        tz.setLocalLocation(tz.getLocation(info.identifier));
       } catch (_) {
         // Device timezone lookup failed; scheduled times fall back to UTC.
       }
 
       _plugin ??= fln.FlutterLocalNotificationsPlugin();
       await _plugin!.initialize(
-        _buildInitializationSettings(),
+        settings: _buildInitializationSettings(),
         onDidReceiveNotificationResponse: _handleResponse,
         onDidReceiveBackgroundNotificationResponse:
             notificationTapBackground,
@@ -178,7 +179,7 @@ class LocalNotificationsService extends FletService {
   /// Routes an invoke call from the Python control. Public so the invoke
   /// seam can be exercised in tests (Flet delivers invokes here via the
   /// listener registered in [init]).
-  Future<dynamic> invokeMethod(String name, dynamic args) async {
+  Future<dynamic> invokeMethod(String name, [dynamic args]) async {
     if (name != "initialize") {
       await _ensureInitialized();
       if (!_initialized) {
@@ -341,7 +342,7 @@ class LocalNotificationsService extends FletService {
         }).toList();
 
     await _plugin?.initialize(
-      _buildInitializationSettings(
+      settings: _buildInitializationSettings(
         darwinCategories: [
           fln.DarwinNotificationCategory(
             "$_darwinCategoryPrefix$id",
@@ -358,25 +359,31 @@ class LocalNotificationsService extends FletService {
 
   Future<bool> _requestPermissions() async {
     final android =
-        _plugin
-            ?.resolvePlatformSpecificImplementation<
-              fln.AndroidFlutterLocalNotificationsPlugin
-            >();
+        _plugin?.resolvePlatformSpecificImplementation<
+          fln.AndroidFlutterLocalNotificationsPlugin
+        >();
     if (android != null) {
       return await android.requestNotificationsPermission() ?? false;
     }
 
-    final darwin =
-        _plugin
-            ?.resolvePlatformSpecificImplementation<
-              fln.IOSFlutterLocalNotificationsPlugin
-            >()
-            ?? _plugin
-                ?.resolvePlatformSpecificImplementation<
-                  fln.MacOSFlutterLocalNotificationsPlugin
-                >();
-    if (darwin != null) {
-      return await darwin.requestPermissions(
+    final ios = _plugin?.resolvePlatformSpecificImplementation<
+      fln.IOSFlutterLocalNotificationsPlugin
+    >();
+    if (ios != null) {
+      return await ios.requestPermissions(
+            sound: control.getBool("request_sound_permission", true)!,
+            alert: control.getBool("request_alert_permission", true)!,
+            badge: control.getBool("request_badge_permission", true)!,
+            critical: control.getBool("request_critical_permission", false)!,
+          ) ??
+          false;
+    }
+
+    final macos = _plugin?.resolvePlatformSpecificImplementation<
+      fln.MacOSFlutterLocalNotificationsPlugin
+    >();
+    if (macos != null) {
+      return await macos.requestPermissions(
             sound: control.getBool("request_sound_permission", true)!,
             alert: control.getBool("request_alert_permission", true)!,
             badge: control.getBool("request_badge_permission", true)!,
