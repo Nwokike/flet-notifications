@@ -157,6 +157,8 @@ jobs:
             --foreground-service-type specialUse
       - name: Rebuild with gradle
         working-directory: examples/flet_notifications_example/build/flutter/android
+        env:
+          SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/examples/flet_notifications_example/build/site-packages
         run: ./gradlew assembleRelease -Psplit-per-abi=true
       - name: Stage APKs
         working-directory: examples/flet_notifications_example
@@ -206,6 +208,8 @@ jobs:
             --foreground-service-type specialUse
       - name: Rebuild with gradle
         working-directory: examples/flet_notifications_example/build/flutter/android
+        env:
+          SERIOUS_PYTHON_SITE_PACKAGES: ${{ github.workspace }}/examples/flet_notifications_example/build/site-packages
         run: ./gradlew bundleRelease
       - name: Upload to GitHub Release
         if: github.event_name != 'pull_request'
