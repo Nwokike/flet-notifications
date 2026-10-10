@@ -1,0 +1,26 @@
+[project]
+name = "flet-notifications-example"
+version = "0.1.0"
+description = "Example app for flet-notifications: exercises every notification feature on all platforms."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flet>=1.0.0",
+    "flet-notifications",
+]
+
+[tool.uv.sources]
+flet-notifications = { path = "../..", editable = true }
+
+[tool.flet]
+org = "ng.kiri"
+product = "Flet Notifications Example"
+build_number = 1
+
+[tool.flet.app]
+path = "src"
+
+[dependency-groups]
+dev = [
+    "flet-cli",
+]
