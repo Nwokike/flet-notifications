@@ -84,6 +84,17 @@ def patch_manifest(manifest_path: Path) -> list[str]:
     for name, boot_filter in RECEIVERS:
         existing = application.findall(f"receiver[@android:name='{name}']", NS)
         if existing:
+            # Repair an incomplete receiver: a boot receiver without its
+            # intent-filter set never receives boot events.
+            receiver = existing[0]
+            if boot_filter and not receiver.findall("intent-filter"):
+                for action in BOOT_ACTIONS:
+                    intent = ET.SubElement(receiver, "intent-filter")
+                    ET.SubElement(intent, "action").set(_android_attr("name"), action)
+                changed.append(f"receiver {name.rsplit('.', 1)[-1]} filters")
+            if receiver.get(_android_attr("exported")) != "false":
+                receiver.set(_android_attr("exported"), "false")
+                changed.append(f"receiver {name.rsplit('.', 1)[-1]} exported")
             continue
         receiver = ET.SubElement(application, "receiver")
         receiver.set(_android_attr("name"), name)
@@ -100,27 +111,61 @@ def patch_manifest(manifest_path: Path) -> list[str]:
 
 
 def patch_gradle(gradle_path: Path) -> list[str]:
-    """Enable core-library desugaring (FLN v19+ requirement)."""
+    """Enable core-library desugaring (FLN v19+ requirement).
+
+    Real Flet projects have a non-empty ``dependencies { ... }`` block, so
+    the desugaring line is inserted after the opening brace rather than
+    matching only the literal empty form. Missing anchors are reported on
+    stderr instead of silently succeeding.
+    """
     if not gradle_path.exists():
         return []
     text = gradle_path.read_text(encoding="utf-8")
     changed: list[str] = []
+    warnings: list[str] = []
 
-    if "isCoreLibraryDesugaringEnabled" not in text and "compileOptions {" in text:
-        text = text.replace(
-            "compileOptions {",
-            "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
-            1,
-        )
-        changed.append("isCoreLibraryDesugaringEnabled")
+    if "isCoreLibraryDesugaringEnabled" not in text:
+        if "compileOptions {" in text:
+            text = text.replace(
+                "compileOptions {",
+                "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                1,
+            )
+            changed.append("isCoreLibraryDesugaringEnabled")
+        else:
+            warnings.append(
+                "no `compileOptions {` block found; add "
+                "`isCoreLibraryDesugaringEnabled = true` manually"
+            )
 
-    if "coreLibraryDesugaring" not in text and "dependencies {}" in text:
-        text = text.replace(
-            "dependencies {}",
-            'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}',
-            1,
-        )
-        changed.append("coreLibraryDesugaring")
+    if "coreLibraryDesugaring" not in text:
+        if "dependencies {" in text:
+            text = text.replace(
+                "dependencies {",
+                'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
+                1,
+            )
+            changed.append("coreLibraryDesugaring")
+        else:
+            warnings.append(
+                "no `dependencies {` block found; add "
+                'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4") '
+                "manually"
+            )
+
+    if "multiDexEnabled" not in text:
+        if "defaultConfig {" in text:
+            text = text.replace(
+                "defaultConfig {",
+                "defaultConfig {\n        multiDexEnabled = true",
+                1,
+            )
+            changed.append("multiDexEnabled")
+        else:
+            warnings.append(
+                "no `defaultConfig {` block found; add `multiDexEnabled = true` "
+                "manually"
+            )
 
     if "multiDexEnabled" not in text and "defaultConfig {" in text:
         text = text.replace(
@@ -132,11 +177,38 @@ def patch_gradle(gradle_path: Path) -> list[str]:
 
     if changed:
         gradle_path.write_text(text, encoding="utf-8")
+    for warning in warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     return changed
 
 
+# Android 14+ foreground-service types that map to FOREGROUND_SERVICE_*
+# permissions (shortService and dataSync-style values map to real
+# permissions; everything else must be a known type).
+_FGS_TYPES = {
+    "camera": "FOREGROUND_SERVICE_CAMERA",
+    "connectedDevice": "FOREGROUND_SERVICE_CONNECTED_DEVICE",
+    "dataSync": "FOREGROUND_SERVICE_DATA_SYNC",
+    "health": "FOREGROUND_SERVICE_HEALTH",
+    "location": "FOREGROUND_SERVICE_LOCATION",
+    "mediaPlayback": "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+    "mediaProjection": "FOREGROUND_SERVICE_MEDIA_PROJECTION",
+    "microphone": "FOREGROUND_SERVICE_MICROPHONE",
+    "phoneCall": "FOREGROUND_SERVICE_PHONE_CALL",
+    "remoteMessaging": "FOREGROUND_SERVICE_REMOTE_MESSAGING",
+    "shortService": "FOREGROUND_SERVICE_SHORT_SERVICE",
+    "specialUse": "FOREGROUND_SERVICE_SPECIAL_USE",
+    "systemExempted": "FOREGROUND_SERVICE_SYSTEM_EXEMPTED",
+}
+
+
 def patch_foreground_service(manifest_path: Path, service_type: str) -> list[str]:
-    """Add the ForegroundService declaration (opt-in)."""
+    """Add the ForegroundService declaration and permissions (opt-in)."""
+    if service_type not in _FGS_TYPES:
+        raise ValueError(
+            f"unknown foreground-service type {service_type!r}; "
+            f"expected one of: {', '.join(_FGS_TYPES)}"
+        )
     ET.register_namespace("android", ANDROID_NS)
     tree = ET.parse(manifest_path)
     root = tree.getroot()
@@ -154,15 +226,17 @@ def patch_foreground_service(manifest_path: Path, service_type: str) -> list[str
     if service_type == "specialUse":
         # Android 14 requires the subtype property for specialUse.
         prop = ET.SubElement(service, "property")
-        prop.set(_android_attr("name"), "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE")
+        prop.set(
+            _android_attr("name"),
+            "android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE",
+        )
         prop.set(
             _android_attr("value"),
             "flet-notifications foreground service",
         )
-    tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
     for permission in (
         "android.permission.FOREGROUND_SERVICE",
-        f"android.permission.FOREGROUND_SERVICE_{service_type.upper()}",
+        f"android.permission.{_FGS_TYPES[service_type]}",
     ):
         if not root.findall(f"uses-permission[@android:name='{permission}']", NS):
             element = ET.Element("uses-permission")

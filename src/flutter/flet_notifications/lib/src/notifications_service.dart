@@ -214,7 +214,12 @@ class LocalNotificationsService extends FletService {
         return await _show(args);
 
       case "cancel":
-        await _plugin?.cancel(id: (args as Map)["id"] as int);
+        final map = args as Map;
+        final tag = map["tag"] as String?;
+        await _plugin?.cancel(
+          id: map["id"] as int,
+          tag: tag?.isEmpty == true ? null : tag,
+        );
         return "ok";
 
       case "cancel_all":
@@ -301,7 +306,7 @@ class LocalNotificationsService extends FletService {
         return await _deleteChannelGroup(args);
 
       default:
-        throw Exception("Unknown LocalNotifications method: $name");
+        return "error:unknown_method:$name";
     }
   }
 
@@ -752,6 +757,7 @@ class LocalNotificationsService extends FletService {
           id,
           name,
           description: map["description"] as String?,
+          groupId: map["group_id"] as String?,
           importance: _mapImportance(map["importance"] as String?),
           bypassDnd: optionalBool(map["bypass_dnd"]) ?? false,
           playSound: optionalBool(map["play_sound"]) ?? true,
@@ -797,12 +803,16 @@ class LocalNotificationsService extends FletService {
                 "id": c.id,
                 "name": c.name,
                 "description": c.description ?? "",
+                "groupId": c.groupId,
                 "importance": c.importance.name,
                 "bypass_dnd": c.bypassDnd,
                 "play_sound": c.playSound,
+                "sound": c.sound?.sound,
                 "enable_vibration": c.enableVibration,
                 "vibration_pattern": c.vibrationPattern?.toList(),
                 "show_badge": c.showBadge,
+                "enable_lights": c.enableLights,
+                "led_color": c.ledColor?.toARGB32().toRadixString(16),
               },
             )
             .toList(),
@@ -840,7 +850,9 @@ class LocalNotificationsService extends FletService {
     var v = hex.trim();
     if (!v.startsWith("#")) return null;
     v = v.substring(1);
-    return Color(int.parse(v, radix: 16) | 0xFF000000);
+    final value = int.parse(v, radix: 16);
+    // #RRGGBB is opaque; #AARRGGBB keeps its alpha.
+    return Color(v.length == 8 ? value : value | 0xFF000000);
   }
 
   // ── Foreground service (Android) ─────────────────────────────────────

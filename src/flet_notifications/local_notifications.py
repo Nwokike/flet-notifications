@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -9,7 +10,12 @@ import flet as ft
 from flet.utils import from_dict
 
 from flet_notifications.actions import NotificationAction
-from flet_notifications.base import NotificationEvent, check_result, to_bool
+from flet_notifications.base import (
+    NotificationError,
+    NotificationEvent,
+    check_result,
+    to_bool,
+)
 from flet_notifications.channels import NotificationChannel
 from flet_notifications.events import (
     ActiveNotification,
@@ -198,9 +204,19 @@ class LocalNotifications(ft.Service):
             )
         )
 
-    async def cancel(self, id: int) -> None:
-        """Cancel a previously shown or scheduled notification by id."""
-        check_result(await self._invoke_method("cancel", {"id": id}))
+    async def cancel(self, id: int, tag: Optional[str] = None) -> None:
+        """Cancel a previously shown or scheduled notification.
+
+        Args:
+            id: Notification id.
+            tag: Android notification tag (for grouped notifications posted
+                with a tag).
+        """
+        check_result(
+            await self._invoke_method(
+                "cancel", {"id": id, "tag": tag} if tag else {"id": id}
+            )
+        )
 
     async def cancel_all(self) -> None:
         """Cancel all shown notifications."""
@@ -353,7 +369,7 @@ class LocalNotifications(ft.Service):
         """
         result = await self._invoke_method("get_pending")
         check_result(result)
-        return self._parse_pending(result)
+        return self._parse_pending(self._as_list(result))
 
     @staticmethod
     def _parse_pending(result: object) -> list[PendingNotification]:
@@ -372,6 +388,26 @@ class LocalNotifications(ft.Service):
                 )
             )
         return pending
+
+    @staticmethod
+    def _as_list(result: object) -> list:
+        """Decode a query result: Dart returns decoded collections or a JSON
+        string depending on the platform (MsgPack vs method-channel transport)."""
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except json.JSONDecodeError as e:
+                raise NotificationError("query_failed", str(e)) from e
+        return result if isinstance(result, list) else []
+
+    @staticmethod
+    def _as_dict(result: object) -> dict:
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except json.JSONDecodeError as e:
+                raise NotificationError("query_failed", str(e)) from e
+        return result if isinstance(result, dict) else {}
 
     async def can_schedule_exact_notifications(self) -> bool:
         """Android: whether the app may schedule exact alarms (14+)."""
@@ -403,11 +439,9 @@ class LocalNotifications(ft.Service):
         """List the app's Android notification channels."""
         result = await self._invoke_method("get_notification_channels")
         check_result(result)
-        if not isinstance(result, list):
-            return []
         return [
             NotificationChannel.from_dict(entry)
-            for entry in result
+            for entry in self._as_list(result)
             if isinstance(entry, dict)
         ]
 
@@ -419,6 +453,8 @@ class LocalNotifications(ft.Service):
         title: Optional[str] = None,
         body: Optional[str] = None,
         payload: str = "",
+        actions: Optional[list[NotificationAction]] = None,
+        style: Optional[Style] = None,
         show_progress: bool = False,
         max_progress: int = 0,
         progress: int = 0,
@@ -440,9 +476,10 @@ class LocalNotifications(ft.Service):
                     "title": title,
                     "body": body,
                     "payload": payload,
+                    "actions": [a.to_dict() for a in actions] if actions else None,
                     **self._serialize_details(
                         self._details_args(
-                            None,
+                            style,
                             show_progress,
                             max_progress,
                             progress,
@@ -478,8 +515,7 @@ class LocalNotifications(ft.Service):
         """
         result = await self._invoke_method("get_active")
         check_result(result)
-        if not isinstance(result, list):
-            return []
+        entries = self._as_list(result)
         return [
             ActiveNotification(
                 id=int(e.get("id", 0)),
@@ -491,7 +527,7 @@ class LocalNotifications(ft.Service):
                 payload=str(e.get("payload") or ""),
                 big_text=str(e.get("big_text") or ""),
             )
-            for e in result
+            for e in entries
             if isinstance(e, dict)
         ]
 
@@ -504,8 +540,7 @@ class LocalNotifications(ft.Service):
         """
         result = await self._invoke_method("get_launch_details")
         check_result(result)
-        if not isinstance(result, dict):
-            return LaunchDetails()
+        result = self._as_dict(result)
         launched = bool(result.get("did_notification_launch_app", False))
         notification = result.get("notification")
         if not isinstance(notification, dict):
@@ -536,12 +571,18 @@ class LocalNotifications(ft.Service):
 
     # ── Channel groups (Android 8.0+) ───────────────────────────────────
 
-    async def create_notification_channel_group(self, group_id: str, name: str) -> None:
+    async def create_notification_channel_group(
+        self, group_id: str, name: str, description: str = ""
+    ) -> None:
         """Create an Android notification-channel group."""
         check_result(
             await self._invoke_method(
                 "create_notification_channel_group",
-                {"group_id": group_id, "name": name},
+                {
+                    "group_id": group_id,
+                    "name": name,
+                    "description": description,
+                },
             )
         )
 

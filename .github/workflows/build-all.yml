@@ -63,8 +63,8 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
             echo "RELEASE_NAME=flet-notifications ${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
-            echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=false" >> $GITHUB_OUTPUT
+            echo "MAKE_LATEST=true" >> $GITHUB_OUTPUT
           else
             SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
             echo "TAG_NAME=build-${SHORT_SHA}" >> $GITHUB_OUTPUT
@@ -97,6 +97,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
       - name: Build Windows portable
         working-directory: examples/flet_notifications_example
         run: |
@@ -104,6 +108,7 @@ jobs:
             --product "Flet Notifications Example" --org ng.kiri `
             --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
       - name: Package zip
+        working-directory: examples/flet_notifications_example
         run: |
           Compress-Archive -Path build/windows/* -DestinationPath build/windows/flet-notifications-example-windows.zip -Force
       - name: Upload to GitHub Release
@@ -111,7 +116,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
-          files: build/windows/flet-notifications-example-windows.zip
+          files: examples/flet_notifications_example/build/windows/flet-notifications-example-windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -122,6 +127,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -130,9 +138,9 @@ jobs:
         working-directory: examples/flet_notifications_example
         run: |
           set +e
-          uv run flet build apk --yes --project notifications `
-            --product "Flet Notifications Example" --org ng.kiri `
-            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} `
+          uv run flet build apk --yes --project notifications \
+            --product "Flet Notifications Example" --org ng.kiri \
+            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} \
             --split-per-abi -v
           echo "flet build exit $? — the patcher + gradle rebuild follow"
       - name: Patch the generated Android project
@@ -140,7 +148,7 @@ jobs:
         run: |
           # flutter_local_notifications needs core-library desugaring plus
           # three receivers that [tool.flet.android.*] cannot express.
-          uv run flet-notifications-patch `
+          uv run flet-notifications-patch \
             --project-root build/flutter --foreground-service-type specialUse
       - name: Rebuild with gradle
         working-directory: examples/flet_notifications_example/build/flutter/android
@@ -167,6 +175,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -175,14 +186,14 @@ jobs:
         working-directory: examples/flet_notifications_example
         run: |
           set +e
-          uv run flet build aab --yes --project notifications `
-            --product "Flet Notifications Example" --org ng.kiri `
+          uv run flet build aab --yes --project notifications \
+            --product "Flet Notifications Example" --org ng.kiri \
             --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
           echo "flet build exit $? — the patcher + gradle rebuild follow"
       - name: Patch the generated Android project
         working-directory: examples/flet_notifications_example
         run: |
-          uv run flet-notifications-patch `
+          uv run flet-notifications-patch \
             --project-root build/flutter --foreground-service-type specialUse
       - name: Rebuild with gradle
         working-directory: examples/flet_notifications_example/build/flutter/android
@@ -203,6 +214,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -213,8 +228,8 @@ jobs:
       - name: Build Linux bundle
         working-directory: examples/flet_notifications_example
         run: |
-          uv run flet build linux --yes --project notifications `
-            --product "Flet Notifications Example" --org ng.kiri `
+          uv run flet build linux --yes --project notifications \
+            --product "Flet Notifications Example" --org ng.kiri \
             --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
       - name: Package tar.gz / deb / rpm
         working-directory: examples/flet_notifications_example
@@ -245,11 +260,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
       - name: Build macOS app
         working-directory: examples/flet_notifications_example
         run: |
-          uv run flet build macos --yes --project notifications `
-            --product "Flet Notifications Example" --org ng.kiri `
+          uv run flet build macos --yes --project notifications \
+            --product "Flet Notifications Example" --org ng.kiri \
             --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
       - name: Package dmg
         run: |
@@ -274,11 +293,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
       - name: Build web bundle
         working-directory: examples/flet_notifications_example
         run: |
-          uv run flet build web --yes --project notifications `
-            --product "Flet Notifications Example" --org ng.kiri `
+          uv run flet build web --yes --project notifications \
+            --product "Flet Notifications Example" --org ng.kiri \
             --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
       - name: Package zip
         working-directory: examples/flet_notifications_example

@@ -19,6 +19,7 @@ class NotificationChannel:
     id: str
     name: str
     description: str = ""
+    group_id: Optional[str] = None
     importance: Importance = Importance.DEFAULT
     bypass_dnd: bool = False
     play_sound: bool = True
@@ -42,6 +43,7 @@ class NotificationChannel:
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "group_id": self.group_id,
             "importance": self.importance.value,
             "bypass_dnd": self.bypass_dnd,
             "play_sound": self.play_sound,
@@ -61,6 +63,7 @@ class NotificationChannel:
             id=str(data.get("id", "")),
             name=str(data.get("name", "")),
             description=str(data.get("description") or ""),
+            group_id=data.get("groupId") or data.get("group_id"),
             importance=Importance(data.get("importance", "defaultImportance")),
             bypass_dnd=bool(data.get("bypass_dnd", False)),
             play_sound=bool(data.get("play_sound", True)),
