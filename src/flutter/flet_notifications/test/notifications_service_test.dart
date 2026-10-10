@@ -480,9 +480,12 @@ void main() {
     expect(plugin.exactAlarmRequests, 1);
   });
 
-  test("unknown method throws", () {
+  test("unknown method returns the unknown_method error code", () async {
     final service = _makeService();
-    expect(() => service.invokeMethod("nope", null), throwsA(isA<Exception>()));
+    expect(
+      await service.invokeMethod("nope", null),
+      "error:unknown_method:nope",
+    );
   });
 
   registerPhase3Tests();
