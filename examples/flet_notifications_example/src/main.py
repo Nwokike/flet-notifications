@@ -236,6 +236,40 @@ async def main(page: ft.Page):
         await notifications.stop_foreground_service()
         set_status("foreground service stopped")
 
+    # ── Probes (Phase 4) ────────────────────────────────────────────────
+
+    async def check_enabled(_):
+        enabled = await notifications.are_notifications_enabled()
+        set_status(f"notifications enabled: {enabled}")
+
+    async def open_settings(_):
+        await notifications.open_app_notification_settings()
+        set_status("opened OS notification settings")
+
+    async def list_active(_):
+        active = await notifications.get_active_notifications()
+        log.controls.append(
+            ft.Text(f"active: {[(a.id, a.title) for a in active]}", size=13)
+        )
+        page.update(log)
+
+    async def check_launch(_):
+        details = await notifications.get_notification_app_launch_details()
+        if details.did_notification_launch_app:
+            set_status(f"launched by notification: {details.notification.payload!r}")
+        else:
+            set_status("not launched by a notification")
+
+    async def check_policy(_):
+        granted = await notifications.has_notification_policy_access()
+        set_status(f"DND access: {granted}")
+        if not granted:
+            await notifications.request_notification_policy_access()
+
+    async def channel_groups(_):
+        await notifications.create_notification_channel_group("demo", "Demo group")
+        set_status("channel group 'demo' created")
+
     page.add(
         ft.Text("flet-notifications", size=24, weight=ft.FontWeight.BOLD),
         status,
@@ -273,6 +307,18 @@ async def main(page: ft.Page):
                 ft.ElevatedButton("Grouped", on_click=show_grouped),
                 ft.ElevatedButton("Start FGS", on_click=start_fgs),
                 ft.ElevatedButton("Stop FGS", on_click=stop_fgs),
+            ],
+            wrap=True,
+            spacing=8,
+        ),
+        ft.Row(
+            [
+                ft.ElevatedButton("Are enabled", on_click=check_enabled),
+                ft.ElevatedButton("Open settings", on_click=open_settings),
+                ft.ElevatedButton("Active list", on_click=list_active),
+                ft.ElevatedButton("Launch details", on_click=check_launch),
+                ft.ElevatedButton("DND access", on_click=check_policy),
+                ft.ElevatedButton("Channel group", on_click=channel_groups),
             ],
             wrap=True,
             spacing=8,

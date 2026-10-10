@@ -1,0 +1,301 @@
+name: Build Multi-Platform Example & Create Release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: "Build version"
+        required: true
+        default: "0.1.0"
+      build_number:
+        description: "Build number"
+        required: true
+        default: "1"
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"
+  FLET_CLI_NO_RICH_OUTPUT: "1"
+  UV_PYTHON: "3.14"
+  BUILD_VERSION: ${{ inputs.build_version || '0.1.0' }}
+  BUILD_NUMBER: ${{ inputs.build_number || '1' }}
+
+jobs:
+  # ─── Q. Quality gate: lint + tests (blocks every build) ──────────────
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install dependencies (incl. dev group)
+        run: |
+          uv pip install --system -e .
+          uv pip install --system pytest pytest-asyncio ruff
+      - name: Ruff
+        run: |
+          ruff check src tests examples
+          ruff format --check src tests examples
+      - name: Tests
+        run: pytest -q
+
+  # ─── 0. Create Release Tag & Placeholder ─────────────────────────────
+  prepare-release:
+    needs: [quality]
+    runs-on: ubuntu-latest
+    outputs:
+      TAG_NAME: ${{ steps.tag_info.outputs.TAG_NAME }}
+      RELEASE_NAME: ${{ steps.tag_info.outputs.RELEASE_NAME }}
+      IS_PRERELEASE: ${{ steps.tag_info.outputs.IS_PRERELEASE }}
+      MAKE_LATEST: ${{ steps.tag_info.outputs.MAKE_LATEST }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Release Tag & Name
+        id: tag_info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=flet-notifications ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+            echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "TAG_NAME=build-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=Automated Build (${SHORT_SHA})" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+            echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Create GitHub Release Placeholder
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_info.outputs.TAG_NAME }}
+          name: ${{ steps.tag_info.outputs.RELEASE_NAME }}
+          prerelease: ${{ steps.tag_info.outputs.IS_PRERELEASE }}
+          make_latest: ${{ steps.tag_info.outputs.MAKE_LATEST }}
+          body: |
+            Automated multi-platform example build for `flet-notifications`.
+
+            The example app exercises the full extension API on every
+            platform. Android builds run the `flet-notifications-patch`
+            step, which injects the scheduled-notification receivers and
+            the core-library-desugaring flags.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 1. Windows (portable zip + installer) ──────────────────────────
+  build-windows:
+    needs: [prepare-release]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build Windows portable
+        working-directory: examples/flet_notifications_example
+        run: |
+          uv run flet build windows --yes --project notifications `
+            --product "Flet Notifications Example" --org ng.kiri `
+            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
+      - name: Package zip
+        run: |
+          Compress-Archive -Path build/windows/* -DestinationPath build/windows/flet-notifications-example-windows.zip -Force
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          files: build/windows/flet-notifications-example-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 2. Android APK (split per ABI) with the notification patcher ────
+  build-apk-split:
+    needs: [prepare-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: First flet build pass (desugaring failure tolerated)
+        working-directory: examples/flet_notifications_example
+        run: |
+          set +e
+          uv run flet build apk --yes --project notifications `
+            --product "Flet Notifications Example" --org ng.kiri `
+            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} `
+            --split-per-abi -v
+          echo "flet build exit $? — the patcher + gradle rebuild follow"
+      - name: Patch the generated Android project
+        working-directory: examples/flet_notifications_example
+        run: |
+          # flutter_local_notifications needs core-library desugaring plus
+          # three receivers that [tool.flet.android.*] cannot express.
+          uv run flet-notifications-patch `
+            --project-root build/flutter --foreground-service-type specialUse
+      - name: Rebuild with gradle
+        working-directory: examples/flet_notifications_example/build/flutter/android
+        run: ./gradlew assembleRelease -Psplit-per-abi=true
+      - name: Stage APKs
+        working-directory: examples/flet_notifications_example
+        run: |
+          rm -rf build/apk && mkdir -p build/apk
+          find build/flutter -name "*.apk" -not -path "*/intermediates/*" -exec cp {} build/apk/ \;
+          ls -lh build/apk/
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          files: examples/flet_notifications_example/build/apk/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 3. Android AAB (Play Store) with the notification patcher ───────
+  build-aab:
+    needs: [prepare-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: First flet build pass (desugaring failure tolerated)
+        working-directory: examples/flet_notifications_example
+        run: |
+          set +e
+          uv run flet build aab --yes --project notifications `
+            --product "Flet Notifications Example" --org ng.kiri `
+            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
+          echo "flet build exit $? — the patcher + gradle rebuild follow"
+      - name: Patch the generated Android project
+        working-directory: examples/flet_notifications_example
+        run: |
+          uv run flet-notifications-patch `
+            --project-root build/flutter --foreground-service-type specialUse
+      - name: Rebuild with gradle
+        working-directory: examples/flet_notifications_example/build/flutter/android
+        run: ./gradlew bundleRelease
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          files: examples/flet_notifications_example/build/flutter/android/app/build/outputs/bundle/release/*.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 4. Linux (tar.gz + deb + rpm) ───────────────────────────────────
+  build-linux:
+    needs: [prepare-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev libmpv-dev mpv pkg-config \
+            rpm ruby ruby-dev
+          sudo gem install --no-document fpm
+      - name: Build Linux bundle
+        working-directory: examples/flet_notifications_example
+        run: |
+          uv run flet build linux --yes --project notifications `
+            --product "Flet Notifications Example" --org ng.kiri `
+            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
+      - name: Package tar.gz / deb / rpm
+        working-directory: examples/flet_notifications_example
+        run: |
+          mkdir -p build/dist pkg_root/usr/lib/fletnotifications
+          cp -a build/linux/* pkg_root/usr/lib/fletnotifications/
+          tar -czf build/dist/flet-notifications-example-linux-x86_64.tar.gz \
+            -C build/linux .
+          fpm -s dir -t deb -n flet-notifications-example -v ${{ env.BUILD_VERSION }} \
+            --architecture amd64 -p build/dist/flet-notifications-example_amd64.deb \
+            -C pkg_root .
+          fpm -s dir -t rpm -n flet-notifications-example -v ${{ env.BUILD_VERSION }} \
+            --architecture x86_64 -p build/dist/flet-notifications-example_x86_64.rpm \
+            -C pkg_root .
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          files: examples/flet_notifications_example/build/dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 5. macOS (dmg) ──────────────────────────────────────────────────
+  build-macos:
+    needs: [prepare-release]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build macOS app
+        working-directory: examples/flet_notifications_example
+        run: |
+          uv run flet build macos --yes --project notifications `
+            --product "Flet Notifications Example" --org ng.kiri `
+            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
+      - name: Package dmg
+        run: |
+          mkdir -p build/dist
+          hdiutil create -volname "Flet Notifications Example" \
+            -srcfolder examples/flet_notifications_example/build/macos \
+            -ov -format UDZO \
+            build/dist/flet-notifications-example-macos.dmg
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          files: build/dist/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── 6. Web (static) ─────────────────────────────────────────────────
+  build-web:
+    needs: [prepare-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build web bundle
+        working-directory: examples/flet_notifications_example
+        run: |
+          uv run flet build web --yes --project notifications `
+            --product "Flet Notifications Example" --org ng.kiri `
+            --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
+      - name: Package zip
+        working-directory: examples/flet_notifications_example
+        run: |
+          mkdir -p build/dist
+          tar -czf build/dist/flet-notifications-example-web.tar.gz \
+            -C build/web .
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.TAG_NAME }}
+          files: examples/flet_notifications_example/build/dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# NOTE: iOS is intentionally not built here — it needs Apple code-signing
+# credentials, which are provisioned owner-side. Build with:
+#   uv run flet build ipa --project notifications --org ng.kiri ...
+# on a machine with a configured signing identity.
