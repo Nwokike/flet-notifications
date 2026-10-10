@@ -484,6 +484,8 @@ void main() {
     final service = _makeService();
     expect(() => service.invokeMethod("nope", null), throwsA(isA<Exception>()));
   });
+
+  registerPhase3Tests();
 }
 
 // ── Phase 3: channels, styles, progress, foreground service ────────────
@@ -531,7 +533,8 @@ class _ChannelRecordingPlugin extends _FakeAndroidPlugin {
   }
 }
 
-group("Phase 3: rich notifications", () {
+void registerPhase3Tests() {
+  group("Phase 3: rich notifications", () {
   late _ChannelRecordingPlugin plugin;
 
   setUp(() {
@@ -681,3 +684,4 @@ group("Phase 3: rich notifications", () {
     expect(result, startsWith("error:invalid_service_id:"));
   });
 });
+}

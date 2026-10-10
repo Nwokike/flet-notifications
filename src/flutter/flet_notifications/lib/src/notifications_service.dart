@@ -532,18 +532,34 @@ class LocalNotificationsService extends FletService {
     }
   }
 
+  /// Maps an icon onto a style image. FLN's big-picture bitmaps support
+  /// drawable, file-path and byte sources only.
   fln.AndroidBitmap<Object>? _mapBitmap(ParsedIcon? icon) {
     if (icon == null) return null;
     final drawable = icon.drawableResource;
     if (drawable != null) return fln.DrawableResourceAndroidBitmap(drawable);
     final path = icon.filePath;
     if (path != null) return fln.FilePathAndroidBitmap(path);
-    final uri = icon.contentUri;
-    if (uri != null) return fln.ContentUriAndroidBitmap(uri);
-    final asset = icon.flutterAsset;
-    if (asset != null) return fln.FlutterBitmapAssetAndroidBitmap(asset);
     final data = icon.data;
     if (data != null) return fln.ByteArrayAndroidBitmap(Uint8List.fromList(data));
+    throw const FormatException(
+      "big-picture images support drawable, file path and byte sources",
+    );
+  }
+
+  /// Maps an icon onto an Android notification icon (all five sources).
+  fln.AndroidIcon<Object>? _mapIcon(ParsedIcon? icon) {
+    if (icon == null) return null;
+    final drawable = icon.drawableResource;
+    if (drawable != null) return fln.DrawableResourceAndroidIcon(drawable);
+    final path = icon.filePath;
+    if (path != null) return fln.BitmapFilePathAndroidIcon(path);
+    final uri = icon.contentUri;
+    if (uri != null) return fln.ContentUriAndroidIcon(uri);
+    final asset = icon.flutterAsset;
+    if (asset != null) return fln.FlutterBitmapAssetAndroidIcon(asset);
+    final data = icon.data;
+    if (data != null) return fln.ByteArrayAndroidIcon(Uint8List.fromList(data));
     throw const FormatException("icon has no source");
   }
 
@@ -554,7 +570,7 @@ class LocalNotificationsService extends FletService {
       bot: person.bot,
       important: person.important,
       uri: person.uri,
-      icon: _mapBitmap(person.icon),
+      icon: _mapIcon(person.icon),
     );
   }
 
@@ -668,7 +684,6 @@ class LocalNotificationsService extends FletService {
     // plugin requests the browser permission on `show`.
     return true;
   }
-}
 
   // ── Channels (Android 8.0+) ──────────────────────────────────────────
 
@@ -823,3 +838,4 @@ class LocalNotificationsService extends FletService {
     await android.stopForegroundService();
     return "ok";
   }
+}
