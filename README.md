@@ -144,21 +144,43 @@ SCHEDULE_EXACT_ALARM = true     # exact schedule modes
 `<application>` children, which `[tool.flet.android.*]` cannot declare —
 Flet exposes only `permission`, `feature`, `meta_data` and `provider`.
 They must be injected into `build/flutter/android/app/src/main/
-AndroidManifest.xml` after `flet build apk`. An automated `flet-notifications-
-patch` console script that adds them (plus the core-library-desugaring Gradle
-flags the plugin needs) is planned for Phase 4. Without it, per-notification-
-scheduling falls back to `AndroidScheduleMode.INEXACT` (no exact alarms) and
-survives app restarts but not reboots.
+AndroidManifest.xml` after `flet build apk`.
 
-Until then, scheduled notifications on Android work fully inside a running
-app session; boot restore needs the manual manifest edit.
+### `flet-notifications-patch`
+
+The extension ships a console script that does this for you — it adds the
+receivers, the required permissions, and the core-library-desugaring Gradle
+flags the plugin needs (idempotently):
+
+```bash
+uv run flet build apk --yes --project myapp --org com.example -v
+uv run flet-notifications-patch --project-root build/flutter
+# foreground services (opt-in):
+uv run flet-notifications-patch --project-root build/flutter \
+    --foreground-service-type specialUse
+# then compile with the patched project:
+cd build/flutter/android && ./gradlew assembleRelease -Psplit-per-abi=true
+```
+
+## Error codes
+
+Failures raise `NotificationError` with a stable ``code``:
+
+| Code | Meaning |
+|---|---|
+| `unsupported_platform` | The OS lacks the feature (e.g. scheduling on Linux/Web) |
+| `init_failed` | The notification backend could not initialize |
+| `show_failed` / `schedule_failed` | The OS rejected the notification |
+| `invalid_action` / `invalid_style` / `invalid_schedule` / `invalid_channel` / `invalid_service_id` | Bad configuration |
+| `channel_failed` / `foreground_service_failed` | Android channel/service failure |
+| `query_failed` / `permission_failed` | Probe or permission failure |
 
 ## Development status
 
-Phase 1 of 5 is complete (show / cancel / permissions / tap & action
-events). Scheduling, rich styles, channels, progress and platform-specific
-options land in the next phases — see
-[docs/roadmap.md](docs/roadmap.md).
+All five feature phases are complete: core show/cancel/permissions/events,
+scheduling, rich styles/channels/progress/grouping/foreground service, and
+platform completion (probes, error taxonomy, Android patcher). The first
+PyPI release is next — see [docs/roadmap.md](docs/roadmap.md).
 
 ## Documentation
 

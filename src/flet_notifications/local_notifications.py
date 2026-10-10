@@ -6,11 +6,16 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import flet as ft
+from flet.utils import from_dict
 
 from flet_notifications.actions import NotificationAction
 from flet_notifications.base import NotificationEvent, check_result, to_bool
 from flet_notifications.channels import NotificationChannel
-from flet_notifications.events import PendingNotification
+from flet_notifications.events import (
+    ActiveNotification,
+    LaunchDetails,
+    PendingNotification,
+)
 from flet_notifications.scheduling import (
     build_periodic_args,
     build_schedule_args,
@@ -455,3 +460,96 @@ class LocalNotifications(ft.Service):
     async def stop_foreground_service(self) -> None:
         """Stop the foreground service started by this app."""
         check_result(await self._invoke_method("stop_foreground_service"))
+
+    # ── Probes & OS integration ─────────────────────────────────────────
+
+    async def are_notifications_enabled(self) -> bool:
+        """Whether the OS will deliver this app's notifications."""
+        return to_bool(await self._invoke_method("are_notifications_enabled"))
+
+    async def open_app_notification_settings(self) -> None:
+        """Open the OS notification settings page for this app."""
+        check_result(await self._invoke_method("open_app_settings"))
+
+    async def get_active_notifications(self) -> list[ActiveNotification]:
+        """List notifications currently shown in the tray.
+
+        Supported on Android 6+, iOS 10+ and macOS 10.14+; empty elsewhere.
+        """
+        result = await self._invoke_method("get_active")
+        check_result(result)
+        if not isinstance(result, list):
+            return []
+        return [
+            ActiveNotification(
+                id=int(e.get("id", 0)),
+                channel_id=str(e.get("channel_id") or ""),
+                group_key=str(e.get("group_key") or ""),
+                tag=str(e.get("tag") or ""),
+                title=str(e.get("title") or ""),
+                body=str(e.get("body") or ""),
+                payload=str(e.get("payload") or ""),
+                big_text=str(e.get("big_text") or ""),
+            )
+            for e in result
+            if isinstance(e, dict)
+        ]
+
+    async def get_notification_app_launch_details(self) -> LaunchDetails:
+        """How the app was launched — if a notification launched it.
+
+        Background taps are replayed automatically to ``on_tap`` /
+        ``on_action``; this is for apps that want the cold-start details
+        themselves.
+        """
+        result = await self._invoke_method("get_launch_details")
+        check_result(result)
+        if not isinstance(result, dict):
+            return LaunchDetails()
+        launched = bool(result.get("did_notification_launch_app", False))
+        notification = result.get("notification")
+        if not isinstance(notification, dict):
+            return LaunchDetails(did_notification_launch_app=launched)
+        return LaunchDetails(
+            did_notification_launch_app=launched,
+            notification=from_dict(
+                NotificationEvent,
+                {"control": self, "name": "tap", **notification},
+            ),
+        )
+
+    async def request_full_screen_intent_permission(self) -> bool:
+        """Android 14+: request the full-screen-intent permission."""
+        return to_bool(
+            await self._invoke_method("request_full_screen_intent", timeout=300)
+        )
+
+    async def has_notification_policy_access(self) -> bool:
+        """Android: whether the app may bypass Do Not Disturb."""
+        return to_bool(await self._invoke_method("has_notification_policy_access"))
+
+    async def request_notification_policy_access(self) -> bool:
+        """Android: open the Do-Not-Disturb access settings screen."""
+        return to_bool(
+            await self._invoke_method("request_notification_policy_access", timeout=300)
+        )
+
+    # ── Channel groups (Android 8.0+) ───────────────────────────────────
+
+    async def create_notification_channel_group(self, group_id: str, name: str) -> None:
+        """Create an Android notification-channel group."""
+        check_result(
+            await self._invoke_method(
+                "create_notification_channel_group",
+                {"group_id": group_id, "name": name},
+            )
+        )
+
+    async def delete_notification_channel_group(self, group_id: str) -> None:
+        """Delete an Android notification-channel group and its channels."""
+        check_result(
+            await self._invoke_method(
+                "delete_notification_channel_group",
+                {"group_id": group_id},
+            )
+        )

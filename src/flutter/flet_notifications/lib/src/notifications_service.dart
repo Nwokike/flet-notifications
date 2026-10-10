@@ -192,6 +192,19 @@ class LocalNotificationsService extends FletService {
         return "error:init_failed:notification backend unavailable";
       }
     }
+    try {
+      return await _dispatch(name, args);
+    } on UnimplementedError {
+      // The plugin/platform cannot do this (e.g. scheduling on Linux/web).
+      return "error:unsupported_platform:$name is not available on this "
+          "platform";
+    } on UnsupportedError {
+      return "error:unsupported_platform:$name is not available on this "
+          "platform";
+    }
+  }
+
+  Future<dynamic> _dispatch(String name, dynamic args) async {
     switch (name) {
       case "initialize":
         await _ensureInitialized(force: true);
@@ -252,6 +265,40 @@ class LocalNotificationsService extends FletService {
         return (await android.requestExactAlarmsPermission() ?? false)
             ? "true"
             : "false";
+
+      case "are_notifications_enabled":
+        return (await _areNotificationsEnabled()) ? "true" : "false";
+
+      case "open_app_settings":
+        await _plugin?.openAppNotificationSettings();
+        return "ok";
+
+      case "get_active":
+        return await _getActive();
+
+      case "get_launch_details":
+        return await _getLaunchDetails();
+
+      case "request_full_screen_intent":
+        final android = _androidPlugin;
+        return (await android?.requestFullScreenIntentPermission() ?? false)
+            ? "true"
+            : "false";
+
+      case "has_notification_policy_access":
+        return (await _hasNotificationPolicyAccess()) ? "true" : "false";
+
+      case "request_notification_policy_access":
+        final android = _androidPlugin;
+        return (await android?.requestNotificationPolicyAccess() ?? false)
+            ? "true"
+            : "false";
+
+      case "create_notification_channel_group":
+        return await _createChannelGroup(args);
+
+      case "delete_notification_channel_group":
+        return await _deleteChannelGroup(args);
 
       default:
         throw Exception("Unknown LocalNotifications method: $name");
@@ -836,6 +883,104 @@ class LocalNotificationsService extends FletService {
       return "error:unsupported_platform:foreground service is Android-only";
     }
     await android.stopForegroundService();
+    return "ok";
+  }
+
+  // ── Probes & OS integration ───────────────────────────────
+
+  Future<bool> _areNotificationsEnabled() async {
+    final android = _androidPlugin;
+    if (android != null) {
+      return await android.areNotificationsEnabled() ?? false;
+    }
+    final ios = _plugin?.resolvePlatformSpecificImplementation<
+        fln.IOSFlutterLocalNotificationsPlugin>();
+    if (ios != null) {
+      return (await ios.checkPermissions())?.isEnabled ?? false;
+    }
+    final macos = _plugin?.resolvePlatformSpecificImplementation<
+        fln.MacOSFlutterLocalNotificationsPlugin>();
+    if (macos != null) {
+      return (await macos.checkPermissions())?.isEnabled ?? false;
+    }
+    // Windows/Linux/web have no queryable gate.
+    return true;
+  }
+
+  Future<bool> _hasNotificationPolicyAccess() async {
+    final android = _androidPlugin;
+    return await android?.hasNotificationPolicyAccess() ?? false;
+  }
+
+  Future<String> _getActive() async {
+    try {
+      final active = await _plugin?.getActiveNotifications() ?? const [];
+      return jsonEncode(
+        active
+            .map(
+              (a) => {
+                "id": a.id,
+                "channel_id": a.channelId,
+                "group_key": a.groupKey,
+                "tag": a.tag,
+                "title": a.title,
+                "body": a.body,
+                "payload": a.payload,
+                "big_text": a.bigText,
+              },
+            )
+            .toList(),
+      );
+    } catch (e) {
+      return "error:query_failed:$e";
+    }
+  }
+
+  Future<String> _getLaunchDetails() async {
+    try {
+      final details = await _plugin?.getNotificationAppLaunchDetails();
+      if (details == null || details.didNotificationLaunchApp != true) {
+        return jsonEncode({"did_notification_launch_app": false});
+      }
+      final response = details.notificationResponse;
+      return jsonEncode({
+        "did_notification_launch_app": true,
+        "notification":
+            response == null ? null : responseToEvent(response),
+      });
+    } catch (e) {
+      return "error:query_failed:$e";
+    }
+  }
+
+  Future<String> _createChannelGroup(dynamic args) async {
+    final android = _androidPlugin;
+    if (android == null) {
+      return "error:unsupported_platform:channel groups are Android-only";
+    }
+    try {
+      final map = args as Map;
+      await android.createNotificationChannelGroup(
+        fln.AndroidNotificationChannelGroup(
+          map["group_id"] as String,
+          map["name"] as String,
+        ),
+      );
+      return "ok";
+    } catch (e) {
+      return "error:channel_failed:$e";
+    }
+  }
+
+  Future<String> _deleteChannelGroup(dynamic args) async {
+    final android = _androidPlugin;
+    if (android == null) {
+      return "error:unsupported_platform:channel groups are Android-only";
+    }
+    final map = args as Map;
+    await android.deleteNotificationChannelGroup(
+      groupId: map["group_id"] as String,
+    );
     return "ok";
   }
 }

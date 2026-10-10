@@ -30,12 +30,30 @@ class NotificationEvent(ft.Event[ft.EventControlType]):
     response_type: str = ResponseType.TAP.value
 
 
+class NotificationErrorCode:
+    """Stable machine-readable error codes raised by the service."""
+
+    UNSUPPORTED_PLATFORM = "unsupported_platform"
+    INIT_FAILED = "init_failed"
+    SHOW_FAILED = "show_failed"
+    SCHEDULE_FAILED = "schedule_failed"
+    INVALID_ACTION = "invalid_action"
+    INVALID_SCHEDULE = "invalid_schedule"
+    INVALID_STYLE = "invalid_style"
+    INVALID_CHANNEL = "invalid_channel"
+    INVALID_SERVICE_ID = "invalid_service_id"
+    CHANNEL_FAILED = "channel_failed"
+    FOREGROUND_SERVICE_FAILED = "foreground_service_failed"
+    QUERY_FAILED = "query_failed"
+    PERMISSION_FAILED = "permission_failed"
+    UNKNOWN_METHOD = "unknown_method"
+
+
 class NotificationError(Exception):
     """Raised when a notification operation fails.
 
-    ``code`` is a stable machine-readable identifier:
-    ``unsupported_platform``, ``init_failed``, ``show_failed``,
-    ``cancel_failed``, ``permission_failed``, ``unknown_method``.
+    ``code`` is a stable machine-readable identifier — see
+    :class:`NotificationErrorCode` for the full list.
     """
 
     def __init__(self, code: str, message: str = "") -> None:

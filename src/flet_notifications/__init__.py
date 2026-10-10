@@ -8,11 +8,16 @@ extension architecture as ``flet-ads`` / ``flet-yandex-ads``.
 from flet_notifications.actions import NotificationAction, NotificationActionInput
 from flet_notifications.base import (
     NotificationError,
+    NotificationErrorCode,
     NotificationEvent,
     ResponseType,
 )
 from flet_notifications.channels import NotificationChannel
-from flet_notifications.events import PendingNotification
+from flet_notifications.events import (
+    ActiveNotification,
+    LaunchDetails,
+    PendingNotification,
+)
 from flet_notifications.local_notifications import LocalNotifications
 from flet_notifications.styles import (
     AndroidIcon,
@@ -35,6 +40,7 @@ from flet_notifications.types import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "ActiveNotification",
     "AndroidIcon",
     "AndroidScheduleMode",
     "BigPictureStyle",
@@ -43,6 +49,7 @@ __all__ = [
     "GroupAlertBehavior",
     "Importance",
     "InboxStyle",
+    "LaunchDetails",
     "LocalNotifications",
     "Message",
     "MessagingStyle",
@@ -50,6 +57,7 @@ __all__ = [
     "NotificationActionInput",
     "NotificationChannel",
     "NotificationError",
+    "NotificationErrorCode",
     "NotificationEvent",
     "PendingNotification",
     "Person",

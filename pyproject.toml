@@ -17,6 +17,9 @@ Homepage = "https://github.com/Nwokike/flet-notifications"
 Repository = "https://github.com/Nwokike/flet-notifications"
 Issues = "https://github.com/Nwokike/flet-notifications/issues"
 
+[project.scripts]
+flet-notifications-patch = "flet_notifications.patcher:main"
+
 [tool.setuptools.package-data]
 "flutter.flet_notifications" = ["**/*"]
 

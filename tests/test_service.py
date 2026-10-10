@@ -30,6 +30,7 @@ def test_control_type_string():
 
 def test_exports():
     assert fn.__all__ == [
+        "ActiveNotification",
         "AndroidIcon",
         "AndroidScheduleMode",
         "BigPictureStyle",
@@ -38,6 +39,7 @@ def test_exports():
         "GroupAlertBehavior",
         "Importance",
         "InboxStyle",
+        "LaunchDetails",
         "LocalNotifications",
         "Message",
         "MessagingStyle",
@@ -45,6 +47,7 @@ def test_exports():
         "NotificationActionInput",
         "NotificationChannel",
         "NotificationError",
+        "NotificationErrorCode",
         "NotificationEvent",
         "PendingNotification",
         "Person",

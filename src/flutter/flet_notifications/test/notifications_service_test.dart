@@ -531,6 +531,26 @@ class _ChannelRecordingPlugin extends _FakeAndroidPlugin {
   Future<void> stopForegroundService() async {
     foregroundStops++;
   }
+
+  bool notificationsEnabled = true;
+  int settingsOpened = 0;
+  final List<fln.ActiveNotification> activeNotifications = [];
+
+  @override
+  Future<bool?> areNotificationsEnabled() async {
+    return notificationsEnabled;
+  }
+
+  @override
+  Future<bool?> openAppNotificationSettings() async {
+    settingsOpened++;
+    return true;
+  }
+
+  @override
+  Future<List<fln.ActiveNotification>> getActiveNotifications() async {
+    return activeNotifications;
+  }
 }
 
 void registerPhase3Tests() {
@@ -668,6 +688,48 @@ void registerPhase3Tests() {
     expect(plugin.foregroundStarts, 1);
     expect(await service.invokeMethod("stop_foreground_service", null), "ok");
     expect(plugin.foregroundStops, 1);
+  });
+
+  test("are_notifications_enabled routes to the platform probe", () async {
+    final service = _makeService();
+    expect(
+      await service.invokeMethod("are_notifications_enabled", null),
+      "true",
+    );
+    plugin.notificationsEnabled = false;
+    expect(
+      await service.invokeMethod("are_notifications_enabled", null),
+      "false",
+    );
+  });
+
+  test("open_app_settings routes to the platform", () async {
+    final service = _makeService();
+    expect(await service.invokeMethod("open_app_settings", null), "ok");
+    expect(plugin.settingsOpened, 1);
+  });
+
+  test("get_active returns JSON records", () async {
+    plugin.activeNotifications.add(
+      fln.ActiveNotification(
+        id: 3,
+        channelId: "alerts",
+        groupKey: "g",
+        tag: "t",
+        title: "T",
+        body: "B",
+        payload: "p",
+        bigText: "long",
+      ),
+    );
+    final service = _makeService();
+    final result = await service.invokeMethod("get_active", null);
+    final decoded = jsonDecode(result as String) as List;
+    final first = decoded.single as Map;
+    expect(first["id"], 3);
+    expect(first["title"], "T");
+    expect(first["payload"], "p");
+    expect(first["big_text"], "long");
   });
 
   test("foreground service rejects id zero", () async {
