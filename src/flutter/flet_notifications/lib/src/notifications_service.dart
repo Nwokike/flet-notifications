@@ -268,17 +268,27 @@ class LocalNotificationsService extends FletService {
   }
 
   Future<String> _schedule(dynamic args) async {
+    final map = args as Map;
+    final List<ParsedAction> actions;
     try {
-      final map = args as Map;
-      final id = map["id"] as int;
-      final actions = parseActions(map["actions"]);
+      actions = parseActions(map["actions"]);
+    } on FormatException catch (e) {
+      return "error:invalid_action:${e.message}";
+    }
+    final tz.TZDateTime scheduledDate;
+    try {
+      scheduledDate = parseWhen(map, tz.local);
+    } on FormatException catch (e) {
+      return "error:invalid_schedule:${e.message}";
+    }
+    try {
       await _plugin!.zonedSchedule(
-        id: id,
+        id: map["id"] as int,
         title: map["title"] as String?,
         body: map["body"] as String?,
-        scheduledDate: parseWhen(map, tz.local),
+        scheduledDate: scheduledDate,
         notificationDetails: await _buildNotificationDetails(
-          id: id,
+          id: map["id"] as int,
           actions: actions,
         ),
         androidScheduleMode: parseScheduleMode(map["schedule_mode"] as String?),
@@ -288,8 +298,6 @@ class LocalNotificationsService extends FletService {
         ),
       );
       return "ok";
-    } on FormatException catch (e) {
-      return "error:invalid_action:${e.message}";
     } catch (e) {
       return "error:schedule_failed:$e";
     }

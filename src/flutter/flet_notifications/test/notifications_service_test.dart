@@ -20,6 +20,7 @@ class _FakeAndroidPlugin extends fln.AndroidFlutterLocalNotificationsPlugin {
   bool exactAlarmsAllowed = true;
   int exactAlarmRequests = 0;
   final List<fln.PendingNotificationRequest> pending = [];
+  bool rejectPastSchedules = false;
 
   @override
   Future<bool> initialize({
@@ -60,6 +61,10 @@ class _FakeAndroidPlugin extends fln.AndroidFlutterLocalNotificationsPlugin {
     fln.AndroidScheduleMode scheduleMode =
         fln.AndroidScheduleMode.exact,
   }) async {
+    if (rejectPastSchedules) {
+      // Mirrors the real platform's validateDateIsInTheFuture.
+      throw ArgumentError("scheduled date must be in the future");
+    }
     scheduled.add({
       "id": id,
       "title": title,
@@ -372,6 +377,25 @@ void main() {
       "payload": "",
       "actions": null,
       "when": {"nonsense": true},
+      "repeat_interval": null,
+      "match_components": null,
+      "schedule_mode": "exactAllowWhileIdle",
+    });
+    expect(result, startsWith("error:invalid_schedule:"));
+    expect(plugin.scheduled, isEmpty);
+  });
+
+  test("schedule in the past surfaces as schedule_failed", () async {
+    // The real platform rejects past dates via validateDateIsInTheFuture.
+    plugin.rejectPastSchedules = true;
+    final service = _makeService();
+    final result = await service.invokeMethod("schedule", {
+      "id": 99,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "when": {"iso": "2020-01-01T09:00:00", "utc_offset_seconds": null},
       "repeat_interval": null,
       "match_components": null,
       "schedule_mode": "exactAllowWhileIdle",
