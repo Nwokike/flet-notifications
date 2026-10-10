@@ -1,6 +1,8 @@
 import 'package:flet/flet.dart';
 import 'package:flutter/widgets.dart';
 
+import 'notifications_service.dart';
+
 class Extension extends FletExtension {
   @override
   void ensureInitialized() {
@@ -11,6 +13,8 @@ class Extension extends FletExtension {
   @override
   FletService? createService(Control control) {
     switch (control.type) {
+      case "LocalNotifications":
+        return LocalNotificationsService(control: control);
       default:
         return null;
     }
@@ -18,9 +22,6 @@ class Extension extends FletExtension {
 
   @override
   Widget? createWidget(Key? key, Control control) {
-    switch (control.type) {
-      default:
-        return null;
-    }
+    return null;
   }
 }
