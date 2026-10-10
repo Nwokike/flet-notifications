@@ -9,14 +9,17 @@ import flet as ft
 
 from flet_notifications.actions import NotificationAction
 from flet_notifications.base import NotificationEvent, check_result, to_bool
+from flet_notifications.channels import NotificationChannel
 from flet_notifications.events import PendingNotification
 from flet_notifications.scheduling import (
     build_periodic_args,
     build_schedule_args,
 )
+from flet_notifications.styles import Style
 from flet_notifications.types import (
     AndroidScheduleMode,
     DateTimeComponents,
+    GroupAlertBehavior,
     RepeatInterval,
 )
 
@@ -88,6 +91,41 @@ class LocalNotifications(ft.Service):
     )
     """Fired when the OS reports the notification was dismissed/cleared."""
 
+    # ── Shared kwargs for show / schedule / periodically_show ────────────
+
+    @staticmethod
+    def _details_args(
+        style: Optional[Style],
+        show_progress: bool,
+        max_progress: int,
+        progress: int,
+        indeterminate: bool,
+        group_key: Optional[str],
+        set_as_group_summary: bool,
+        group_alert_behavior: GroupAlertBehavior,
+        channel_id: Optional[str],
+    ) -> dict:
+        """Collect the style/progress/grouping kwargs (unserialized)."""
+        return {
+            "style": style,
+            "show_progress": show_progress,
+            "max_progress": max_progress,
+            "progress": progress,
+            "indeterminate": indeterminate,
+            "group_key": group_key,
+            "set_as_group_summary": set_as_group_summary,
+            "group_alert_behavior": group_alert_behavior,
+            "channel_id": channel_id,
+        }
+
+    @staticmethod
+    def _serialize_details(details: dict) -> dict:
+        """Convert details kwargs to JSON-ready wire form (for ``show``)."""
+        out = dict(details)
+        out["style"] = details["style"].to_dict() if details["style"] else None
+        out["group_alert_behavior"] = details["group_alert_behavior"].value
+        return out
+
     async def initialize(self) -> None:
         """Initialize the notification backend.
 
@@ -103,15 +141,31 @@ class LocalNotifications(ft.Service):
         body: Optional[str] = None,
         payload: str = "",
         actions: Optional[list[NotificationAction]] = None,
+        style: Optional[Style] = None,
+        show_progress: bool = False,
+        max_progress: int = 0,
+        progress: int = 0,
+        indeterminate: bool = False,
+        group_key: Optional[str] = None,
+        set_as_group_summary: bool = False,
+        group_alert_behavior: GroupAlertBehavior = GroupAlertBehavior.ALL,
+        channel_id: Optional[str] = None,
     ) -> None:
         """Show a notification immediately.
 
         Args:
-            id: Notification id; showing again with the same id updates it.
+            id: Notification id; showing again with the same id updates it —
+                this is how live progress bars are advanced.
             title: Notification title.
             body: Notification body text.
             payload: Opaque string handed back on tap (e.g. a deep link).
             actions: Action buttons shown on the notification.
+            style: Rich style (big text / big picture / inbox / messaging).
+            show_progress: Show a determinate (or indeterminate) progress bar.
+            group_key: Group related notifications together.
+            set_as_group_summary: Use this notification as the group summary.
+            group_alert_behavior: Which notifications in the group alert.
+            channel_id: Android channel to post on (created if missing).
         """
         check_result(
             await self._invoke_method(
@@ -122,6 +176,19 @@ class LocalNotifications(ft.Service):
                     "body": body,
                     "payload": payload,
                     "actions": [a.to_dict() for a in actions] if actions else None,
+                    **self._serialize_details(
+                        self._details_args(
+                            style,
+                            show_progress,
+                            max_progress,
+                            progress,
+                            indeterminate,
+                            group_key,
+                            set_as_group_summary,
+                            group_alert_behavior,
+                            channel_id,
+                        )
+                    ),
                 },
             )
         )
@@ -156,6 +223,15 @@ class LocalNotifications(ft.Service):
         match_components: Optional[DateTimeComponents] = None,
         schedule_mode: AndroidScheduleMode = AndroidScheduleMode.EXACT_ALLOW_WHILE_IDLE,
         time_zone: Optional[str] = None,
+        style: Optional[Style] = None,
+        show_progress: bool = False,
+        max_progress: int = 0,
+        progress: int = 0,
+        indeterminate: bool = False,
+        group_key: Optional[str] = None,
+        set_as_group_summary: bool = False,
+        group_alert_behavior: GroupAlertBehavior = GroupAlertBehavior.ALL,
+        channel_id: Optional[str] = None,
     ) -> None:
         """Schedule a notification for a future time, handled by the OS.
 
@@ -173,6 +249,12 @@ class LocalNotifications(ft.Service):
             schedule_mode: Android alarm exactness mode.
             time_zone: IANA timezone name for naive ``when`` and recurrence
                 (e.g. ``"Africa/Lagos"``); defaults to the device timezone.
+            style: Rich style (big text / big picture / inbox / messaging).
+            show_progress: Show a determinate (or indeterminate) progress bar.
+            group_key: Group related notifications together.
+            set_as_group_summary: Use this notification as the group summary.
+            group_alert_behavior: Which notifications in the group alert.
+            channel_id: Android channel to post on (created if missing).
         """
         check_result(
             await self._invoke_method(
@@ -188,6 +270,17 @@ class LocalNotifications(ft.Service):
                     match_components=match_components,
                     schedule_mode=schedule_mode,
                     time_zone=time_zone,
+                    **self._details_args(
+                        style,
+                        show_progress,
+                        max_progress,
+                        progress,
+                        indeterminate,
+                        group_key,
+                        set_as_group_summary,
+                        group_alert_behavior,
+                        channel_id,
+                    ),
                 ),
             )
         )
@@ -202,6 +295,15 @@ class LocalNotifications(ft.Service):
         actions: Optional[list[NotificationAction]] = None,
         schedule_mode: AndroidScheduleMode = AndroidScheduleMode.EXACT_ALLOW_WHILE_IDLE,
         repeat_duration_seconds: Optional[int] = None,
+        style: Optional[Style] = None,
+        show_progress: bool = False,
+        max_progress: int = 0,
+        progress: int = 0,
+        indeterminate: bool = False,
+        group_key: Optional[str] = None,
+        set_as_group_summary: bool = False,
+        group_alert_behavior: GroupAlertBehavior = GroupAlertBehavior.ALL,
+        channel_id: Optional[str] = None,
     ) -> None:
         """Show a notification repeating at a fixed interval.
 
@@ -220,6 +322,17 @@ class LocalNotifications(ft.Service):
                     actions=actions or [],
                     schedule_mode=schedule_mode,
                     repeat_duration_seconds=repeat_duration_seconds,
+                    **self._details_args(
+                        style,
+                        show_progress,
+                        max_progress,
+                        progress,
+                        indeterminate,
+                        group_key,
+                        set_as_group_summary,
+                        group_alert_behavior,
+                        channel_id,
+                    ),
                 ),
             )
         )
@@ -264,3 +377,81 @@ class LocalNotifications(ft.Service):
         return to_bool(
             await self._invoke_method("request_exact_alarm_permission", timeout=300)
         )
+
+    # ── Channels (Android 8.0+) ─────────────────────────────────────────
+
+    async def create_notification_channel(self, channel: NotificationChannel) -> None:
+        """Create or update an Android notification channel."""
+        check_result(
+            await self._invoke_method("create_notification_channel", channel.to_dict())
+        )
+
+    async def delete_notification_channel(self, channel_id: str) -> None:
+        """Delete an Android notification channel."""
+        check_result(
+            await self._invoke_method(
+                "delete_notification_channel", {"channel_id": channel_id}
+            )
+        )
+
+    async def get_notification_channels(self) -> list[NotificationChannel]:
+        """List the app's Android notification channels."""
+        result = await self._invoke_method("get_notification_channels")
+        check_result(result)
+        if not isinstance(result, list):
+            return []
+        return [
+            NotificationChannel.from_dict(entry)
+            for entry in result
+            if isinstance(entry, dict)
+        ]
+
+    # ── Foreground service (Android) ────────────────────────────────────
+
+    async def start_foreground_service(
+        self,
+        id: int,
+        title: Optional[str] = None,
+        body: Optional[str] = None,
+        payload: str = "",
+        show_progress: bool = False,
+        max_progress: int = 0,
+        progress: int = 0,
+        indeterminate: bool = False,
+        channel_id: Optional[str] = None,
+    ) -> None:
+        """Start a foreground service with a persistent notification.
+
+        Keeps the process alive for long-running work while showing the
+        notification. Requires manifest entries on Android — see the README.
+        """
+        if id == 0:
+            raise ValueError("foreground service id must be non-zero")
+        check_result(
+            await self._invoke_method(
+                "start_foreground_service",
+                {
+                    "id": id,
+                    "title": title,
+                    "body": body,
+                    "payload": payload,
+                    **self._serialize_details(
+                        self._details_args(
+                            None,
+                            show_progress,
+                            max_progress,
+                            progress,
+                            indeterminate,
+                            None,
+                            False,
+                            GroupAlertBehavior.ALL,
+                            channel_id,
+                        )
+                    ),
+                },
+            )
+        )
+
+    async def stop_foreground_service(self) -> None:
+        """Stop the foreground service started by this app."""
+        check_result(await self._invoke_method("stop_foreground_service"))

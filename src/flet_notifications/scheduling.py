@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from flet_notifications.styles import Style
 from flet_notifications.types import (
     AndroidScheduleMode,
     DateTimeComponents,
+    GroupAlertBehavior,
     RepeatInterval,
 )
 
@@ -23,8 +25,17 @@ def build_schedule_args(
     match_components: DateTimeComponents | None,
     schedule_mode: AndroidScheduleMode,
     time_zone: str | None,
+    style: Style | None = None,
+    show_progress: bool = False,
+    max_progress: int = 0,
+    progress: int = 0,
+    indeterminate: bool = False,
+    group_key: str | None = None,
+    set_as_group_summary: bool = False,
+    group_alert_behavior: GroupAlertBehavior = GroupAlertBehavior.ALL,
+    channel_id: str | None = None,
 ) -> dict:
-    """Build the `schedule` invoke payload.
+    """Build the ``schedule`` invoke payload.
 
     Naive datetimes are wall-clock times interpreted in ``time_zone`` (or the
     device timezone when ``time_zone`` is None); aware datetimes carry their
@@ -57,6 +68,15 @@ def build_schedule_args(
         "repeat_interval": repeat_interval.value if repeat_interval else None,
         "match_components": match_components.value if match_components else None,
         "schedule_mode": schedule_mode.value,
+        "style": style.to_dict() if style else None,
+        "show_progress": show_progress,
+        "max_progress": max_progress,
+        "progress": progress,
+        "indeterminate": indeterminate,
+        "group_key": group_key,
+        "set_as_group_summary": set_as_group_summary,
+        "group_alert_behavior": group_alert_behavior.value,
+        "channel_id": channel_id,
     }
 
 
@@ -70,8 +90,17 @@ def build_periodic_args(
     actions: list,
     schedule_mode: AndroidScheduleMode,
     repeat_duration_seconds: int | None,
+    style: Style | None = None,
+    show_progress: bool = False,
+    max_progress: int = 0,
+    progress: int = 0,
+    indeterminate: bool = False,
+    group_key: str | None = None,
+    set_as_group_summary: bool = False,
+    group_alert_behavior: GroupAlertBehavior = GroupAlertBehavior.ALL,
+    channel_id: str | None = None,
 ) -> dict:
-    """Build the `periodically_show` invoke payload."""
+    """Build the ``periodically_show`` invoke payload."""
     if repeat_duration_seconds is not None and repeat_duration_seconds < 60:
         raise ValueError("repeat_duration_seconds must be at least 60")
     return {
@@ -83,4 +112,13 @@ def build_periodic_args(
         "repeat_interval": repeat_interval.value,
         "schedule_mode": schedule_mode.value,
         "repeat_duration_seconds": repeat_duration_seconds,
+        "style": style.to_dict() if style else None,
+        "show_progress": show_progress,
+        "max_progress": max_progress,
+        "progress": progress,
+        "indeterminate": indeterminate,
+        "group_key": group_key,
+        "set_as_group_summary": set_as_group_summary,
+        "group_alert_behavior": group_alert_behavior.value,
+        "channel_id": channel_id,
     }

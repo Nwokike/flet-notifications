@@ -30,16 +30,27 @@ def test_control_type_string():
 
 def test_exports():
     assert fn.__all__ == [
+        "AndroidIcon",
         "AndroidScheduleMode",
+        "BigPictureStyle",
+        "BigTextStyle",
         "DateTimeComponents",
+        "GroupAlertBehavior",
+        "Importance",
+        "InboxStyle",
         "LocalNotifications",
+        "Message",
+        "MessagingStyle",
         "NotificationAction",
         "NotificationActionInput",
+        "NotificationChannel",
         "NotificationError",
         "NotificationEvent",
         "PendingNotification",
+        "Person",
         "RepeatInterval",
         "ResponseType",
+        "Style",
     ]
     assert fn.__version__ == "0.1.0"
 
@@ -78,6 +89,15 @@ async def test_show_invokes_dart_with_wire_args():
                 },
             }
         ],
+        "style": None,
+        "show_progress": False,
+        "max_progress": 0,
+        "progress": 0,
+        "indeterminate": False,
+        "group_key": None,
+        "set_as_group_summary": False,
+        "group_alert_behavior": "all",
+        "channel_id": None,
     }
 
 

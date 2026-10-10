@@ -66,6 +66,38 @@ delivered on the next start (Android background taps, iOS/macOS launches).
 See [`examples/flet_notifications_example`](examples/flet_notifications_example)
 for a full demo of every feature.
 
+## Styles, channels, progress, foreground service
+
+```python
+from flet_notifications import BigTextStyle, Importance, NotificationChannel
+
+# expandable styles
+await notifications.show(id=1, title="Long read", body="…",
+                         style=BigTextStyle(big_text="the long text"))
+
+# Android channels (create once; sound/vibration are fixed at creation)
+await notifications.create_notification_channel(
+    NotificationChannel(id="alerts", name="Alerts", importance=Importance.HIGH)
+)
+await notifications.show(id=2, title="Alert", body="…", channel_id="alerts")
+
+# progress — call show again with the same id to advance
+await notifications.show(id=3, title="Downloading", show_progress=True,
+                         max_progress=100, progress=40)
+
+# grouping
+await notifications.show(id=4, title="Summary", group_key="updates",
+                         set_as_group_summary=True)
+
+# foreground service (Android; needs FOREGROUND_SERVICE + a <service> entry)
+await notifications.start_foreground_service(id=5, title="Syncing")
+await notifications.stop_foreground_service()
+```
+
+The foreground service on Android additionally needs `FOREGROUND_SERVICE`
+in `[tool.flet.android.permission]` and a `<service>` manifest entry —
+declared the same way as the receivers above via the Phase 4 patcher.
+
 ## Scheduling
 
 ```python

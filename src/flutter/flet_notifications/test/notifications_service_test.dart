@@ -485,3 +485,199 @@ void main() {
     expect(() => service.invokeMethod("nope", null), throwsA(isA<Exception>()));
   });
 }
+
+// ── Phase 3: channels, styles, progress, foreground service ────────────
+
+class _ChannelRecordingPlugin extends _FakeAndroidPlugin {
+  final List<fln.AndroidNotificationChannel> channelsCreated = [];
+  final List<String> channelsDeleted = [];
+  final List<fln.AndroidNotificationChannel> channelsStored = [];
+  int foregroundStarts = 0;
+  int foregroundStops = 0;
+
+  @override
+  Future<void> createNotificationChannel(
+    fln.AndroidNotificationChannel channel,
+  ) async {
+    channelsCreated.add(channel);
+  }
+
+  @override
+  Future<void> deleteNotificationChannel({required String channelId}) async {
+    channelsDeleted.add(channelId);
+  }
+
+  @override
+  Future<List<fln.AndroidNotificationChannel>> getNotificationChannels() async {
+    return channelsStored;
+  }
+
+  @override
+  Future<void> startForegroundService({
+    required int id,
+    String? title,
+    String? body,
+    fln.AndroidNotificationDetails? notificationDetails,
+    String? payload,
+    fln.AndroidServiceStartType startType = fln.AndroidServiceStartType.startSticky,
+    Set<fln.AndroidServiceForegroundType>? foregroundServiceTypes,
+  }) async {
+    foregroundStarts++;
+  }
+
+  @override
+  Future<void> stopForegroundService() async {
+    foregroundStops++;
+  }
+}
+
+group("Phase 3: rich notifications", () {
+  late _ChannelRecordingPlugin plugin;
+
+  setUp(() {
+    plugin = _ChannelRecordingPlugin();
+    fln.FlutterLocalNotificationsPlatform.instance = plugin;
+  });
+
+  test("show forwards style onto styleInformation", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("show", {
+      "id": 1,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "style": {"type": "big_text", "big_text": "long text"},
+      "channel_id": null,
+      "group_key": "grp",
+      "set_as_group_summary": false,
+      "group_alert_behavior": "summary",
+      "show_progress": true,
+      "max_progress": 100,
+      "progress": 30,
+      "indeterminate": false,
+    });
+    expect(result, "ok");
+    final details =
+        plugin.shown.single["details"] as fln.AndroidNotificationDetails;
+    final style = details.styleInformation;
+    expect(style, isA<fln.BigTextStyleInformation>());
+    expect((style as fln.BigTextStyleInformation).bigText, "long text");
+    expect(details.groupKey, "grp");
+    expect(details.groupAlertBehavior, fln.GroupAlertBehavior.summary);
+    expect(details.showProgress, isTrue);
+    expect(details.maxProgress, 100);
+    expect(details.progress, 30);
+  });
+
+  test("show with an invalid style returns invalid_style", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("show", {
+      "id": 1,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "style": {"type": "nope"},
+      "channel_id": null,
+    });
+    expect(result, startsWith("error:invalid_style:"));
+    expect(plugin.shown, isEmpty);
+  });
+
+  test("create_notification_channel maps the config", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("create_notification_channel", {
+      "id": "alerts",
+      "name": "Alerts",
+      "description": "Important stuff",
+      "importance": "high",
+      "bypass_dnd": true,
+      "play_sound": true,
+      "sound": "alert_tone",
+      "enable_vibration": true,
+      "vibration_pattern": [0, 250, 100],
+      "show_badge": true,
+      "enable_lights": false,
+      "led_color": null,
+    });
+    expect(result, "ok");
+    final channel = plugin.channelsCreated.single;
+    expect(channel.id, "alerts");
+    expect(channel.name, "Alerts");
+    expect(channel.description, "Important stuff");
+    expect(channel.importance, fln.Importance.high);
+    expect(channel.bypassDnd, isTrue);
+    expect(channel.sound!.sound, "alert_tone");
+    expect(channel.vibrationPattern!.toList(), [0, 250, 100]);
+  });
+
+  test("create_notification_channel rejects empty id", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("create_notification_channel", {
+      "id": "",
+      "name": "x",
+    });
+    expect(result, "error:invalid_channel:id and name are required");
+  });
+
+  test("delete_notification_channel routes by id", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("delete_notification_channel", {
+      "channel_id": "alerts",
+    });
+    expect(result, "ok");
+    expect(plugin.channelsDeleted, ["alerts"]);
+  });
+
+  test("get_notification_channels returns JSON", () async {
+    plugin.channelsStored.add(
+      fln.AndroidNotificationChannel("alerts", "Alerts"),
+    );
+    final service = _makeService();
+    final result = await service.invokeMethod(
+      "get_notification_channels",
+      null,
+    );
+    final decoded = jsonDecode(result as String) as List;
+    expect(decoded.single["id"], "alerts");
+    expect(decoded.single["name"], "Alerts");
+  });
+
+  test("foreground service start and stop", () async {
+    final service = _makeService();
+    expect(
+      await service.invokeMethod("start_foreground_service", {
+        "id": 7,
+        "title": "Syncing",
+        "body": "Working…",
+        "payload": "",
+        "actions": null,
+        "style": null,
+        "show_progress": true,
+        "max_progress": 100,
+        "progress": 10,
+        "indeterminate": false,
+        "channel_id": null,
+      }),
+      "ok",
+    );
+    expect(plugin.foregroundStarts, 1);
+    expect(await service.invokeMethod("stop_foreground_service", null), "ok");
+    expect(plugin.foregroundStops, 1);
+  });
+
+  test("foreground service rejects id zero", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("start_foreground_service", {
+      "id": 0,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "style": null,
+      "channel_id": null,
+    });
+    expect(result, startsWith("error:invalid_service_id:"));
+  });
+});

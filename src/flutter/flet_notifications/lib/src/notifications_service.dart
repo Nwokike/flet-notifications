@@ -4,6 +4,8 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:ui' show Color;
 
 import 'package:flet/flet.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
@@ -219,6 +221,21 @@ class LocalNotificationsService extends FletService {
       case "get_pending":
         return await _getPending();
 
+      case "create_notification_channel":
+        return await _createChannel(args);
+
+      case "delete_notification_channel":
+        return await _deleteChannel(args);
+
+      case "get_notification_channels":
+        return await _getChannels();
+
+      case "start_foreground_service":
+        return await _startForegroundService(args);
+
+      case "stop_foreground_service":
+        return await _stopForegroundService();
+
       case "request_permissions":
         return (await _requestPermissions()) ? "true" : "false";
 
@@ -249,6 +266,8 @@ class LocalNotificationsService extends FletService {
       final body = map["body"] as String?;
       final payload = map["payload"] as String? ?? "";
       final actions = parseActions(map["actions"]);
+      final styleError = _invalidStyleCode(map["style"]);
+      if (styleError != null) return styleError;
       await _plugin!.show(
         id: id,
         title: title,
@@ -257,6 +276,8 @@ class LocalNotificationsService extends FletService {
         notificationDetails: await _buildNotificationDetails(
           id: id,
           actions: actions,
+          style: parseStyle(map["style"]),
+          details: map,
         ),
       );
       return "ok";
@@ -275,6 +296,8 @@ class LocalNotificationsService extends FletService {
     } on FormatException catch (e) {
       return "error:invalid_action:${e.message}";
     }
+    final styleError = _invalidStyleCode(map["style"]);
+    if (styleError != null) return styleError;
     final tz.TZDateTime scheduledDate;
     try {
       scheduledDate = parseWhen(map, tz.local);
@@ -290,6 +313,8 @@ class LocalNotificationsService extends FletService {
         notificationDetails: await _buildNotificationDetails(
           id: map["id"] as int,
           actions: actions,
+          style: parseStyle(map["style"]),
+          details: map,
         ),
         androidScheduleMode: parseScheduleMode(map["schedule_mode"] as String?),
         payload: map["payload"] as String? ?? "",
@@ -308,9 +333,13 @@ class LocalNotificationsService extends FletService {
       final map = args as Map;
       final id = map["id"] as int;
       final actions = parseActions(map["actions"]);
+      final styleError = _invalidStyleCode(map["style"]);
+      if (styleError != null) return styleError;
       final notificationDetails = await _buildNotificationDetails(
         id: id,
         actions: actions,
+        style: parseStyle(map["style"]),
+        details: map,
       );
       final scheduleMode = parseScheduleMode(map["schedule_mode"] as String?);
       final title = map["title"] as String?;
@@ -376,6 +405,8 @@ class LocalNotificationsService extends FletService {
   Future<fln.NotificationDetails> _buildNotificationDetails({
     required int id,
     required List<ParsedAction> actions,
+    ParsedStyle? style,
+    Map? details,
   }) async {
     final androidActions =
         actions
@@ -419,17 +450,32 @@ class LocalNotificationsService extends FletService {
               (a) => fln.WindowsAction(
                 content: a.title,
                 arguments: a.id,
-                activationBehavior:
-                    fln.WindowsNotificationBehavior.dismiss,
+                activationBehavior: fln.WindowsNotificationBehavior.dismiss,
               ),
             )
             .toList();
 
+    // Rich details forwarded from the invoke payload (all optional).
+    final d = details ?? const {};
+    final channelId = d["channel_id"] as String?;
+    final groupKey = d["group_key"] as String?;
+    final groupAlert = _mapGroupAlertBehavior(
+      d["group_alert_behavior"] as String?,
+    );
+
     return fln.NotificationDetails(
       android: fln.AndroidNotificationDetails(
-        _channelId,
+        channelId ?? _channelId,
         _channelName,
         actions: androidActions,
+        styleInformation: _mapStyleInformation(style),
+        groupKey: groupKey,
+        setAsGroupSummary: optionalBool(d["set_as_group_summary"]) ?? false,
+        groupAlertBehavior: groupAlert,
+        showProgress: optionalBool(d["show_progress"]) ?? false,
+        maxProgress: (d["max_progress"] as int?) ?? 0,
+        progress: (d["progress"] as int?) ?? 0,
+        indeterminate: optionalBool(d["indeterminate"]) ?? false,
       ),
       iOS: darwinDetails,
       macOS: darwinDetails,
@@ -438,6 +484,100 @@ class LocalNotificationsService extends FletService {
       ),
       windows: fln.WindowsNotificationDetails(actions: windowsActions),
     );
+  }
+
+  /// Maps a parsed style onto the Android `styleInformation` object.
+  ///
+  /// Styles are an Android concept in the plugin; iOS/macOS render titles,
+  /// attachments and interruptions through their own details fields.
+  fln.StyleInformation? _mapStyleInformation(ParsedStyle? style) {
+    if (style == null) return null;
+    switch (style.type) {
+      case "big_text":
+        return fln.BigTextStyleInformation(
+          style.bigText!,
+          contentTitle: style.contentTitle,
+          summaryText: style.summaryText,
+        );
+      case "big_picture":
+        return fln.BigPictureStyleInformation(
+          _mapBitmap(style.image!)!,
+          largeIcon: _mapBitmap(style.largeIcon),
+          contentTitle: style.contentTitle,
+          summaryText: style.summaryText,
+        );
+      case "inbox":
+        return fln.InboxStyleInformation(
+          style.lines,
+          contentTitle: style.contentTitle,
+          summaryText: style.summaryText,
+        );
+      case "messaging":
+        return fln.MessagingStyleInformation(
+          _mapPerson(style.person!),
+          conversationTitle: style.conversationTitle,
+          groupConversation: style.groupConversation,
+          messages: style.messages
+              .map(
+                (m) => fln.Message(
+                  m.text,
+                  DateTime.parse(m.timestampIso),
+                  _mapPerson(m.person),
+                ),
+              )
+              .toList(),
+        );
+      default:
+        throw FormatException("unknown style type: ${style.type}");
+    }
+  }
+
+  fln.AndroidBitmap<Object>? _mapBitmap(ParsedIcon? icon) {
+    if (icon == null) return null;
+    final drawable = icon.drawableResource;
+    if (drawable != null) return fln.DrawableResourceAndroidBitmap(drawable);
+    final path = icon.filePath;
+    if (path != null) return fln.FilePathAndroidBitmap(path);
+    final uri = icon.contentUri;
+    if (uri != null) return fln.ContentUriAndroidBitmap(uri);
+    final asset = icon.flutterAsset;
+    if (asset != null) return fln.FlutterBitmapAssetAndroidBitmap(asset);
+    final data = icon.data;
+    if (data != null) return fln.ByteArrayAndroidBitmap(Uint8List.fromList(data));
+    throw const FormatException("icon has no source");
+  }
+
+  fln.Person _mapPerson(ParsedPerson person) {
+    return fln.Person(
+      name: person.name,
+      key: person.key,
+      bot: person.bot,
+      important: person.important,
+      uri: person.uri,
+      icon: _mapBitmap(person.icon),
+    );
+  }
+
+  fln.GroupAlertBehavior _mapGroupAlertBehavior(String? value) {
+    switch (value) {
+      case "summary":
+        return fln.GroupAlertBehavior.summary;
+      case "children":
+        return fln.GroupAlertBehavior.children;
+      default:
+        return fln.GroupAlertBehavior.all;
+    }
+  }
+
+  /// Parses the optional style of a show/schedule payload, mapping format
+  /// failures to the `invalid_style` error code.
+  String? _invalidStyleCode(Object? raw) {
+    try {
+      parseStyle(raw);
+    } on FormatException catch (e) {
+      return "error:invalid_style:${e.message}";
+    }
+    return null;
   }
 
   /// Registers the action buttons as a Darwin notification category.
@@ -529,3 +669,157 @@ class LocalNotificationsService extends FletService {
     return true;
   }
 }
+
+  // ── Channels (Android 8.0+) ──────────────────────────────────────────
+
+  Future<String> _createChannel(dynamic args) async {
+    final android = _androidPlugin;
+    if (android == null) {
+      return "error:unsupported_platform:channels are Android-only";
+    }
+    try {
+      final map = args as Map;
+      final id = map["id"] as String;
+      final name = map["name"] as String;
+      if (id.isEmpty || name.isEmpty) {
+        return "error:invalid_channel:id and name are required";
+      }
+      final ledColor = map["led_color"] as String?;
+      await android.createNotificationChannel(
+        fln.AndroidNotificationChannel(
+          id,
+          name,
+          description: map["description"] as String?,
+          importance: _mapImportance(map["importance"] as String?),
+          bypassDnd: optionalBool(map["bypass_dnd"]) ?? false,
+          playSound: optionalBool(map["play_sound"]) ?? true,
+          sound:
+              map["sound"] == null
+                  ? null
+                  : fln.RawResourceAndroidNotificationSound(
+                    map["sound"] as String,
+                  ),
+          enableVibration: optionalBool(map["enable_vibration"]) ?? true,
+          vibrationPattern: _toInt64List(map["vibration_pattern"]),
+          showBadge: optionalBool(map["show_badge"]) ?? true,
+          enableLights: optionalBool(map["enable_lights"]) ?? false,
+          ledColor: ledColor == null ? null : _parseHexColor(ledColor),
+        ),
+      );
+      return "ok";
+    } catch (e) {
+      return "error:channel_failed:$e";
+    }
+  }
+
+  Future<String> _deleteChannel(dynamic args) async {
+    final android = _androidPlugin;
+    if (android == null) {
+      return "error:unsupported_platform:channels are Android-only";
+    }
+    final map = args as Map;
+    final channelId = map["channel_id"] as String;
+    await android.deleteNotificationChannel(channelId: channelId);
+    return "ok";
+  }
+
+  Future<String> _getChannels() async {
+    final android = _androidPlugin;
+    if (android == null) return "[]";
+    try {
+      final channels = await android.getNotificationChannels() ?? const [];
+      return jsonEncode(
+        channels
+            .map(
+              (c) => {
+                "id": c.id,
+                "name": c.name ?? "",
+                "description": c.description ?? "",
+                "importance": c.importance.name,
+                "bypass_dnd": c.bypassDnd,
+                "play_sound": c.playSound,
+                "enable_vibration": c.enableVibration,
+                "vibration_pattern": c.vibrationPattern?.toList(),
+                "show_badge": c.showBadge,
+              },
+            )
+            .toList(),
+      );
+    } catch (e) {
+      return "error:channel_failed:$e";
+    }
+  }
+
+  fln.Importance _mapImportance(String? value) {
+    switch (value) {
+      case "unspecified":
+        return fln.Importance.unspecified;
+      case "min":
+        return fln.Importance.min;
+      case "none":
+        return fln.Importance.none;
+      case "low":
+        return fln.Importance.low;
+      case "high":
+        return fln.Importance.high;
+      case "max":
+        return fln.Importance.max;
+      default:
+        return fln.Importance.defaultImportance;
+    }
+  }
+
+  Int64List? _toInt64List(Object? value) {
+    if (value is! List) return null;
+    return Int64List.fromList(value.map((e) => e as int).toList());
+  }
+
+  Color? _parseHexColor(String hex) {
+    var v = hex.trim();
+    if (!v.startsWith("#")) return null;
+    v = v.substring(1);
+    return Color(int.parse(v, radix: 16) | 0xFF000000);
+  }
+
+  // ── Foreground service (Android) ─────────────────────────────────────
+
+  Future<String> _startForegroundService(dynamic args) async {
+    final android = _androidPlugin;
+    if (android == null) {
+      return "error:unsupported_platform:foreground service is Android-only";
+    }
+    try {
+      final map = args as Map;
+      final id = map["id"] as int;
+      if (id == 0) {
+        return "error:invalid_service_id:foreground service id must be non-zero";
+      }
+      final actions = parseActions(map["actions"]);
+      final styleError = _invalidStyleCode(map["style"]);
+      if (styleError != null) return styleError;
+      await android.startForegroundService(
+        id: id,
+        title: map["title"] as String?,
+        body: map["body"] as String?,
+        payload: map["payload"] as String? ?? "",
+        notificationDetails: (await _buildNotificationDetails(
+          id: id,
+          actions: actions,
+          style: parseStyle(map["style"]),
+          details: map,
+        )).android,
+      );
+      return "ok";
+    } catch (e) {
+      return "error:foreground_service_failed:$e";
+    }
+  }
+
+  Future<String> _stopForegroundService() async {
+    final android = _androidPlugin;
+    if (android == null) {
+      return "error:unsupported_platform:foreground service is Android-only";
+    }
+    await android.stopForegroundService();
+    return "ok";
+  }

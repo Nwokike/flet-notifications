@@ -11,10 +11,15 @@ import flet as ft
 
 from flet_notifications import (
     AndroidScheduleMode,
+    BigTextStyle,
     DateTimeComponents,
+    GroupAlertBehavior,
+    Importance,
+    InboxStyle,
     LocalNotifications,
     NotificationAction,
     NotificationActionInput,
+    NotificationChannel,
     RepeatInterval,
 )
 
@@ -149,6 +154,88 @@ async def main(page: ft.Page):
         if not allowed:
             await notifications.request_exact_alarm_permission()
 
+    # ── Rich notifications (Phase 3) ────────────────────────────────────
+
+    async def create_channel(_):
+        await notifications.create_notification_channel(
+            NotificationChannel(
+                id="alerts",
+                name="Alerts",
+                description="High-priority alerts",
+                importance=Importance.HIGH,
+            )
+        )
+        set_status("channel 'alerts' created")
+
+    async def list_channels(_):
+        channels = await notifications.get_notification_channels()
+        log.controls.append(
+            ft.Text(f"channels: {[(c.id, c.name) for c in channels]}", size=13)
+        )
+        page.update(log)
+
+    async def show_big_text(_):
+        await notifications.show(
+            id=next_id["value"],
+            title="Long read",
+            body="Tap to expand.",
+            payload="bigtext",
+            style=BigTextStyle(
+                big_text="The quick brown fox jumps over the lazy dog. " * 3
+            ),
+        )
+        next_id["value"] += 1
+
+    async def show_inbox(_):
+        await notifications.show(
+            id=next_id["value"],
+            title="Inbox",
+            body="3 unread.",
+            payload="inbox",
+            style=InboxStyle(lines=["First", "Second", "Third"]),
+        )
+        next_id["value"] += 1
+
+    async def show_progress(_):
+        await notifications.show(
+            id=next_id["value"],
+            title="Downloading",
+            body="0%",
+            payload="progress",
+            show_progress=True,
+            max_progress=4,
+            progress=1,
+        )
+        next_id["value"] += 1
+        set_status("progress started — tap Progress again to advance the id")
+
+    async def show_grouped(_):
+        await notifications.show(
+            id=next_id["value"],
+            title="Summary",
+            body="Group summary.",
+            payload="group",
+            group_key="demo_group",
+            set_as_group_summary=True,
+            group_alert_behavior=GroupAlertBehavior.SUMMARY,
+        )
+        next_id["value"] += 1
+        set_status("group summary shown")
+
+    async def start_fgs(_):
+        await notifications.start_foreground_service(
+            id=next_id["value"],
+            title="Foreground service",
+            body="Work in progress…",
+            payload="fgs",
+        )
+        next_id["value"] += 1
+        set_status("foreground service started")
+
+    async def stop_fgs(_):
+        await notifications.stop_foreground_service()
+        set_status("foreground service stopped")
+
     page.add(
         ft.Text("flet-notifications", size=24, weight=ft.FontWeight.BOLD),
         status,
@@ -172,6 +259,20 @@ async def main(page: ft.Page):
                 ft.ElevatedButton("List pending", on_click=list_pending),
                 ft.ElevatedButton("Cancel pending", on_click=cancel_pending),
                 ft.ElevatedButton("Check exact alarms", on_click=check_exact_alarms),
+            ],
+            wrap=True,
+            spacing=8,
+        ),
+        ft.Row(
+            [
+                ft.ElevatedButton("Create channel", on_click=create_channel),
+                ft.ElevatedButton("List channels", on_click=list_channels),
+                ft.ElevatedButton("Big text style", on_click=show_big_text),
+                ft.ElevatedButton("Inbox style", on_click=show_inbox),
+                ft.ElevatedButton("Progress", on_click=show_progress),
+                ft.ElevatedButton("Grouped", on_click=show_grouped),
+                ft.ElevatedButton("Start FGS", on_click=start_fgs),
+                ft.ElevatedButton("Stop FGS", on_click=stop_fgs),
             ],
             wrap=True,
             spacing=8,

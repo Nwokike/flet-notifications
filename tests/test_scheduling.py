@@ -219,3 +219,65 @@ def test_build_schedule_args_defaults():
     assert args["repeat_interval"] is None
     assert args["match_components"] is None
     assert args["schedule_mode"] == "exactAllowWhileIdle"
+
+
+# ── Phase 3: rich details forwarding ──────────────────────────────────
+
+
+def test_schedule_forwards_style_progress_grouping():
+    from flet_notifications import BigTextStyle, GroupAlertBehavior
+
+    service = RecordingService()
+    service.calls.clear()
+    # recorded via the synchronous RecordingService path
+    import asyncio
+
+    asyncio.run(
+        service.schedule(
+            id=11,
+            when=timedelta(seconds=5),
+            style=BigTextStyle(big_text="long"),
+            show_progress=True,
+            max_progress=100,
+            progress=25,
+            group_key="grp",
+            set_as_group_summary=True,
+            group_alert_behavior=GroupAlertBehavior.SUMMARY,
+            channel_id="c1",
+        )
+    )
+    _, args = service.calls[-1]
+    assert args["style"] == {
+        "type": "big_text",
+        "big_text": "long",
+        "content_title": None,
+        "summary_text": None,
+    }
+    assert args["show_progress"] is True
+    assert args["max_progress"] == 100
+    assert args["progress"] == 25
+    assert args["group_key"] == "grp"
+    assert args["set_as_group_summary"] is True
+    assert args["group_alert_behavior"] == "summary"
+    assert args["channel_id"] == "c1"
+
+
+def test_periodic_forwards_details():
+    from flet_notifications import AndroidScheduleMode
+
+    service = RecordingService()
+    service.calls.clear()
+    import asyncio
+
+    asyncio.run(
+        service.periodically_show(
+            id=12,
+            repeat_interval=RepeatInterval.DAILY,
+            schedule_mode=AndroidScheduleMode.INEXACT,
+            channel_id="c2",
+        )
+    )
+    _, args = service.calls[-1]
+    assert args["schedule_mode"] == "inexact"
+    assert args["channel_id"] == "c2"
+    assert args["style"] is None

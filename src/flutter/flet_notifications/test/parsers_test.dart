@@ -91,4 +91,115 @@ void main() {
       expect(() => parseInput("nope"), throwsFormatException);
     });
   });
+  group("parseStyle", () {
+    test("null yields null", () {
+      expect(parseStyle(null), isNull);
+    });
+
+    test("big_text", () {
+      final style = parseStyle({"type": "big_text", "big_text": "long"})!;
+      expect(style.type, "big_text");
+      expect(style.bigText, "long");
+    });
+
+    test("big_text without text throws", () {
+      expect(() => parseStyle({"type": "big_text"}), throwsFormatException);
+    });
+
+    test("big_picture requires an image", () {
+      expect(
+        () => parseStyle({"type": "big_picture"}),
+        throwsFormatException,
+      );
+      final style = parseStyle({
+        "type": "big_picture",
+        "image": {"file_path": "/tmp/x.png"},
+      })!;
+      expect(style.image!.filePath, "/tmp/x.png");
+    });
+
+    test("inbox", () {
+      final style = parseStyle({
+        "type": "inbox",
+        "lines": ["a", "b"],
+      })!;
+      expect(style.lines, ["a", "b"]);
+      expect(
+        () => parseStyle({"type": "inbox", "lines": []}),
+        throwsFormatException,
+      );
+    });
+
+    test("messaging with person and messages", () {
+      final style = parseStyle({
+        "type": "messaging",
+        "person": {"name": "Ada"},
+        "messages": [
+          {
+            "text": "hi",
+            "timestamp": "2030-01-01T10:00:00",
+            "person": {"name": "Ada"},
+          },
+        ],
+        "conversation_title": "Chat",
+        "group_conversation": true,
+      })!;
+      expect(style.person!.name, "Ada");
+      expect(style.messages.single.text, "hi");
+      expect(style.conversationTitle, "Chat");
+      expect(style.groupConversation, isTrue);
+    });
+
+    test("messaging without person throws", () {
+      expect(() => parseStyle({"type": "messaging"}), throwsFormatException);
+    });
+
+    test("unknown style type throws", () {
+      expect(() => parseStyle({"type": "carousel"}), throwsFormatException);
+    });
+  });
+
+  group("parseIcon", () {
+    test("null yields null", () {
+      expect(parseIcon(null), isNull);
+    });
+
+    test("drawable source", () {
+      expect(
+        parseIcon({"drawable_resource": "ic_star"})!.drawableResource,
+        "ic_star",
+      );
+    });
+
+    test("requires exactly one source", () {
+      expect(() => parseIcon({}), throwsFormatException);
+      expect(
+        () => parseIcon({"drawable_resource": "ic", "file_path": "/x"}),
+        throwsFormatException,
+      );
+    });
+
+    test("base64 data is decoded", () {
+      // "hi" in base64
+      final icon = parseIcon({"data_base64": "aGk="})!;
+      expect(icon.data, [104, 105]);
+    });
+  });
+
+  group("parsePerson", () {
+    test("null yields null", () {
+      expect(parsePerson(null), isNull);
+    });
+
+    test("defaults", () {
+      final person = parsePerson({"name": "Bob"})!;
+      expect(person.name, "Bob");
+      expect(person.bot, isFalse);
+      expect(person.important, isFalse);
+    });
+
+    test("requires a name", () {
+      expect(() => parsePerson({"key": "x"}), throwsFormatException);
+    });
+  });
 }

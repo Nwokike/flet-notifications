@@ -1,4 +1,4 @@
-"""Enums for scheduling parameters, mirroring flutter_local_notifications."""
+"""Enums for scheduling and notification parameters."""
 
 from __future__ import annotations
 
@@ -31,3 +31,23 @@ class AndroidScheduleMode(str, Enum):
     EXACT_ALLOW_WHILE_IDLE = "exactAllowWhileIdle"  # default; survives doze
     INEXACT = "inexact"
     INEXACT_ALLOW_WHILE_IDLE = "inexactAllowWhileIdle"
+
+
+class Importance(str, Enum):
+    """Android notification-channel importance (also drives priority)."""
+
+    UNSPECIFIED = "unspecified"
+    MIN = "min"
+    NONE = "none"
+    LOW = "low"
+    DEFAULT = "defaultImportance"
+    HIGH = "high"
+    MAX = "max"
+
+
+class GroupAlertBehavior(str, Enum):
+    """Which notifications in a group alert the user."""
+
+    ALL = "all"
+    SUMMARY = "summary"
+    CHILDREN = "children"

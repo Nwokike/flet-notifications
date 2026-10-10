@@ -11,25 +11,49 @@ from flet_notifications.base import (
     NotificationEvent,
     ResponseType,
 )
+from flet_notifications.channels import NotificationChannel
 from flet_notifications.events import PendingNotification
 from flet_notifications.local_notifications import LocalNotifications
+from flet_notifications.styles import (
+    AndroidIcon,
+    BigPictureStyle,
+    BigTextStyle,
+    InboxStyle,
+    Message,
+    MessagingStyle,
+    Person,
+    Style,
+)
 from flet_notifications.types import (
     AndroidScheduleMode,
     DateTimeComponents,
+    GroupAlertBehavior,
+    Importance,
     RepeatInterval,
 )
 
 __version__ = "0.1.0"
 
 __all__ = [
+    "AndroidIcon",
     "AndroidScheduleMode",
+    "BigPictureStyle",
+    "BigTextStyle",
     "DateTimeComponents",
+    "GroupAlertBehavior",
+    "Importance",
+    "InboxStyle",
     "LocalNotifications",
+    "Message",
+    "MessagingStyle",
     "NotificationAction",
     "NotificationActionInput",
+    "NotificationChannel",
     "NotificationError",
     "NotificationEvent",
     "PendingNotification",
+    "Person",
     "RepeatInterval",
     "ResponseType",
+    "Style",
 ]
