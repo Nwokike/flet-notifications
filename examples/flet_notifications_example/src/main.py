@@ -1,11 +1,12 @@
-"""Example app for flet-notifications.
+"""Example app for flet-notifications — every API on one screen.
 
-Exercises the extension API phase by phase: show / actions / cancel /
-permissions / scheduling, with a live event log for taps, actions and
-dismissals. The app grows a section per phase as the API expands.
+House example pattern: adaptive AppBar, scrollable page, activity terminal
+(Courier New on dark background, timestamped, auto-scroll).
 """
 
-from datetime import datetime, timedelta
+import asyncio
+import contextlib
+import datetime
 
 import flet as ft
 
@@ -15,8 +16,6 @@ from flet_notifications import (
     BigTextStyle,
     DarwinOptions,
     DateTimeComponents,
-    GroupAlertBehavior,
-    Importance,
     InboxStyle,
     LocalNotifications,
     NotificationAction,
@@ -26,418 +25,439 @@ from flet_notifications import (
     RepeatInterval,
 )
 
+# Activity terminal — house pattern (Courier New, #A6E22E on #0D0D0D).
+TERMINAL_BG = "#0D0D0D"
+TERMINAL_TEXT = "#A6E22E"
 
-async def main(page: ft.Page):
-    page.title = "flet-notifications example"
-    page.padding = 24
+
+def main(page: ft.Page):
+    page.appbar = ft.AppBar(adaptive=True, title="flet-notifications Example")
+    page.scroll = ft.ScrollMode.AUTO
+    page.padding = 16
 
     notifications = LocalNotifications()
 
-    log = ft.ListView(expand=True, spacing=4, auto_scroll=True)
-    next_id = {"value": 1}
-    backend_missing = {"warned": False}
+    log_text = ft.Text(
+        value="",
+        font_family="Courier New",
+        size=12,
+        color=TERMINAL_TEXT,
+        selectable=True,
+    )
+    log_col = ft.Column(controls=[log_text], scroll=ft.ScrollMode.AUTO, expand=True)
+    log_terminal = ft.Container(
+        content=log_col,
+        bgcolor=TERMINAL_BG,
+        padding=12,
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
+        border_radius=8,
+        height=320,
+    )
 
-    def log_line(text: str) -> None:
-        log.controls.append(ft.Text(text, size=13))
-        page.update(log)
-
-    def log_event(kind: str, e) -> None:
-        log_line(
-            f"{kind}: id={e.id} action={e.action_id!r} "
-            f"payload={e.payload!r} input={e.input!r}"
+    def log_line(message: str):
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        log_text.value = (
+            f"{log_text.value}\n[{ts}] {message}"
+            if log_text.value
+            else f"[{ts}] {message}"
         )
+        page.update(log_text)
 
-    def warn_no_backend() -> None:
-        """Plain `flet run` uses Flet's prebuilt client, which does not contain
-        this extension's Dart backend — invokes time out. Explain once instead
-        of raising a wall of tracebacks."""
-        if backend_missing["warned"]:
+        async def _scroll_to_end():
+            await asyncio.sleep(0.05)
+            with contextlib.suppress(Exception):
+                await log_col.scroll_to(offset=-1)  # offset=-1: jump to newest
+
+        page.run_task(_scroll_to_end)
+
+    # Plain `flet run` uses the prebuilt client without this extension's
+    # Dart half; invokes time out. Degrade to a terminal line.
+    missing_backend = {"warned": False}
+
+    def warn_no_backend(method: str):
+        if missing_backend["warned"]:
             return
-        backend_missing["warned"] = True
-        log_line(
-            "No notification backend in this runner: `flet run` launches the "
-            "prebuilt client without extension code. Run a built app instead "
-            "— a release artifact (Windows zip / APK / dmg / Linux bundle) or "
-            "`flet build windows|macos|linux|apk` locally."
-        )
+        missing_backend["warned"] = True
+        log_line(f"{method}: no notification backend in this runner.")
+        log_line("Run a built app instead: a release artifact, or")
+        log_line("  uv run flet build windows|macos|linux|apk")
 
-    def backend_guard(handler):
-        """Wrap an on_click handler so a missing backend degrades to a log
-        line instead of a traceback."""
-
-        async def wrapper(e):
+    def guarded(coro, method: str):
+        async def _run():
             try:
-                await handler(e)
+                await coro
             except Exception:  # noqa: BLE001 - any backend failure degrades
-                warn_no_backend()
+                warn_no_backend(method)
 
-        return wrapper
+        page.run_task(_run)
 
-    async def on_tap(e):
-        log_event("tap", e)
-        page.update(log)
+    # ── Events ──
+    notifications.on_tap = lambda e: log_line(f"tap: id={e.id} payload={e.payload!r}")
+    notifications.on_action = lambda e: log_line(
+        f"action: {e.action_id!r} payload={e.payload!r} input={e.input!r}"
+    )
+    notifications.on_dismissed = lambda e: log_line(f"dismissed: id={e.id}")
 
-    async def on_action(e):
-        log_event("action", e)
-        page.update(log)
-
-    async def on_dismissed(e):
-        log_event("dismissed", e)
-        page.update(log)
-
-    notifications.on_tap = on_tap
-    notifications.on_action = on_action
-    notifications.on_dismissed = on_dismissed
-
-    status = ft.Text("", size=13)
-
-    def set_status(text: str) -> None:
-        status.value = text
-        page.update(status)
-
-    async def request_permissions(_):
-        granted = await notifications.request_permissions()
-        set_status(f"permissions granted: {granted}")
-
-    request_permissions = backend_guard(request_permissions)
-
-    async def show(_):
-        await notifications.show(
-            id=next_id["value"],
-            title="Hello",
-            body="A plain notification from flet-notifications.",
-            payload="plain",
-        )
-        next_id["value"] += 1
-
-    show = backend_guard(show)
-
-    async def show_with_actions(_):
-        await notifications.show(
-            id=next_id["value"],
-            title="Action buttons",
-            body="Tap a button — the reply field returns text.",
-            payload="actions",
-            actions=[
-                NotificationAction(id="open", title="Open"),
-                NotificationAction(
-                    id="reply",
-                    title="Reply",
-                    foreground=False,
-                    input=NotificationActionInput(label="Type a reply"),
-                ),
-            ],
-        )
-        next_id["value"] += 1
-
-    show_with_actions = backend_guard(show_with_actions)
-
-    async def cancel(_):
-        await notifications.cancel(next_id["value"] - 1)
-
-    cancel = backend_guard(cancel)
-
-    async def cancel_all(_):
-        await notifications.cancel_all()
-
-    cancel_all = backend_guard(cancel_all)
-
-    # ── Scheduling ──────────────────────────────────────────────────────
-
-    async def schedule_delayed(_):
-        await notifications.schedule(
-            id=next_id["value"],
-            when=timedelta(seconds=10),
-            title="Delayed",
-            body="10 seconds after you tapped.",
-            payload="delayed",
-        )
-        next_id["value"] += 1
-        set_status("scheduled: 10 second delay")
-
-    schedule_delayed = backend_guard(schedule_delayed)
-
-    async def schedule_daily(_):
-        tomorrow = datetime.now() + timedelta(days=1)
-        await notifications.schedule(
-            id=next_id["value"],
-            when=tomorrow.replace(hour=8, minute=30, second=0, microsecond=0),
-            title="Daily reminder",
-            body="Every day at 08:30.",
-            payload="daily",
-            match_components=DateTimeComponents.TIME,
-            schedule_mode=AndroidScheduleMode.EXACT_ALLOW_WHILE_IDLE,
-        )
-        next_id["value"] += 1
-        set_status("scheduled: daily at 08:30")
-
-    schedule_daily = backend_guard(schedule_daily)
-
-    async def schedule_periodic(_):
-        await notifications.periodically_show(
-            id=next_id["value"],
-            repeat_interval=RepeatInterval.HOURLY,
-            title="Hourly",
-            body="An hourly notification.",
-            payload="hourly",
-        )
-        next_id["value"] += 1
-        set_status("scheduled: hourly")
-
-    schedule_periodic = backend_guard(schedule_periodic)
-
-    async def list_pending(_):
-        pending = await notifications.get_pending_notifications()
-        log.controls.append(ft.Text(f"pending: {[p.id for p in pending]}", size=13))
-        page.update(log)
-
-    list_pending = backend_guard(list_pending)
-
-    async def cancel_pending(_):
-        await notifications.cancel_pending()
-        set_status("cancelled all pending")
-
-    cancel_pending = backend_guard(cancel_pending)
-
-    async def check_exact_alarms(_):
-        allowed = await notifications.can_schedule_exact_notifications()
-        set_status(f"exact alarms allowed: {allowed}")
-        if not allowed:
-            await notifications.request_exact_alarm_permission()
-
-    check_exact_alarms = backend_guard(check_exact_alarms)
-
-    # ── Rich notifications (Phase 3) ────────────────────────────────────
-
-    async def create_channel(_):
-        await notifications.create_notification_channel(
-            NotificationChannel(
-                id="alerts",
-                name="Alerts",
-                description="High-priority alerts",
-                importance=Importance.HIGH,
-            )
-        )
-        set_status("channel 'alerts' created")
-
-    create_channel = backend_guard(create_channel)
-
-    async def list_channels(_):
-        channels = await notifications.get_notification_channels()
-        log.controls.append(
-            ft.Text(f"channels: {[(c.id, c.name) for c in channels]}", size=13)
-        )
-        page.update(log)
-
-    list_channels = backend_guard(list_channels)
-
-    async def show_big_text(_):
-        await notifications.show(
-            id=next_id["value"],
-            title="Long read",
-            body="Tap to expand.",
-            payload="bigtext",
-            style=BigTextStyle(
-                big_text="The quick brown fox jumps over the lazy dog. " * 3
+    # ── Show ──
+    def show_plain(e):
+        guarded(
+            notifications.show(
+                id=1, title="Hello", body="A plain notification.", payload="plain"
             ),
+            "show",
         )
-        next_id["value"] += 1
 
-    show_big_text = backend_guard(show_big_text)
-
-    async def show_inbox(_):
-        await notifications.show(
-            id=next_id["value"],
-            title="Inbox",
-            body="3 unread.",
-            payload="inbox",
-            style=InboxStyle(lines=["First", "Second", "Third"]),
-        )
-        next_id["value"] += 1
-
-    show_inbox = backend_guard(show_inbox)
-
-    async def show_progress(_):
-        await notifications.show(
-            id=next_id["value"],
-            title="Downloading",
-            body="0%",
-            payload="progress",
-            show_progress=True,
-            max_progress=4,
-            progress=1,
-        )
-        next_id["value"] += 1
-        set_status("progress started — tap Progress again to advance the id")
-
-    show_progress = backend_guard(show_progress)
-
-    async def show_grouped(_):
-        await notifications.show(
-            id=next_id["value"],
-            title="Summary",
-            body="Group summary.",
-            payload="group",
-            group_key="demo_group",
-            set_as_group_summary=True,
-            group_alert_behavior=GroupAlertBehavior.SUMMARY,
-        )
-        next_id["value"] += 1
-        set_status("group summary shown")
-
-    show_grouped = backend_guard(show_grouped)
-
-    async def show_options(_):
-        """Platform-specific options in one call: silent alarm-category
-        notification on Android, passive interruption on iOS/macOS."""
-        await notifications.show(
-            id=next_id["value"],
-            title="Silent alarm",
-            body="Posted with full platform options.",
-            payload="options",
-            options=NotificationOptions(
-                android=AndroidOptions(
-                    silent=True,
-                    category="alarm",
-                    ongoing=False,
-                    visibility="public",
-                ),
-                iOS=DarwinOptions(interruption_level="passive"),
+    def show_actions(e):
+        guarded(
+            notifications.show(
+                id=2,
+                title="Action buttons",
+                body="Tap a button — the reply field returns text.",
+                actions=[
+                    NotificationAction(id="open", title="Open"),
+                    NotificationAction(
+                        id="reply",
+                        title="Reply",
+                        foreground=False,
+                        input=NotificationActionInput(label="Type a reply"),
+                    ),
+                ],
             ),
+            "show",
         )
-        next_id["value"] += 1
 
-    show_options = backend_guard(show_options)
+    def request_permissions(e):
+        async def _req():
+            try:
+                granted = await notifications.request_permissions()
+                log_line(f"permissions granted: {granted}")
+            except Exception:  # noqa: BLE001
+                warn_no_backend("request_permissions")
 
-    async def start_fgs(_):
-        await notifications.start_foreground_service(
-            id=next_id["value"],
-            title="Foreground service",
-            body="Work in progress…",
-            payload="fgs",
+        page.run_task(_req)
+
+    # ── Scheduling ──
+    def schedule_delayed(e):
+        guarded(
+            notifications.schedule(
+                id=3,
+                when=datetime.timedelta(seconds=10),
+                title="Delayed",
+                body="10 seconds after you tapped.",
+            ),
+            "schedule",
         )
-        next_id["value"] += 1
-        set_status("foreground service started")
 
-    start_fgs = backend_guard(start_fgs)
-
-    async def stop_fgs(_):
-        await notifications.stop_foreground_service()
-        set_status("foreground service stopped")
-
-    stop_fgs = backend_guard(stop_fgs)
-
-    # ── Probes (Phase 4) ────────────────────────────────────────────────
-
-    async def check_enabled(_):
-        enabled = await notifications.are_notifications_enabled()
-        set_status(f"notifications enabled: {enabled}")
-
-    check_enabled = backend_guard(check_enabled)
-
-    async def open_settings(_):
-        await notifications.open_app_notification_settings()
-        set_status("opened OS notification settings")
-
-    open_settings = backend_guard(open_settings)
-
-    async def list_active(_):
-        active = await notifications.get_active_notifications()
-        log.controls.append(
-            ft.Text(f"active: {[(a.id, a.title) for a in active]}", size=13)
+    def schedule_daily(e):
+        guarded(
+            notifications.schedule(
+                id=4,
+                when=(datetime.datetime.now() + datetime.timedelta(days=1)).replace(
+                    hour=8, minute=30, second=0, microsecond=0
+                ),
+                title="Daily reminder",
+                body="Every day at 08:30.",
+                match_components=DateTimeComponents.TIME,
+                schedule_mode=AndroidScheduleMode.EXACT_ALLOW_WHILE_IDLE,
+            ),
+            "schedule",
         )
-        page.update(log)
 
-    list_active = backend_guard(list_active)
+    def schedule_hourly(e):
+        guarded(
+            notifications.periodically_show(
+                id=3,
+                repeat_interval=RepeatInterval.HOURLY,
+                title="Hourly",
+                body="An hourly notification.",
+            ),
+            "periodically_show",
+        )
 
-    async def check_launch(_):
-        details = await notifications.get_notification_app_launch_details()
-        if details.did_notification_launch_app:
-            set_status(f"launched by notification: {details.notification.payload!r}")
-        else:
-            set_status("not launched by a notification")
+    def list_pending(e):
+        async def _list():
+            try:
+                pending = await notifications.get_pending_notifications()
+                log_line(f"pending: {[p.id for p in pending]}")
+            except Exception:  # noqa: BLE001
+                warn_no_backend("get_pending_notifications")
 
-    check_launch = backend_guard(check_launch)
+        page.run_task(_list)
 
-    async def check_policy(_):
-        granted = await notifications.has_notification_policy_access()
-        set_status(f"DND access: {granted}")
-        if not granted:
-            await notifications.request_notification_policy_access()
+    def cancel_pending(e):
+        guarded(notifications.cancel_pending(), "cancel_pending")
 
-    check_policy = backend_guard(check_policy)
+    def check_exact(e):
+        async def _check():
+            try:
+                allowed = await notifications.can_schedule_exact_notifications()
+                log_line(f"exact alarms allowed: {allowed}")
+                if not allowed:
+                    await notifications.request_exact_alarm_permission()
+            except Exception:  # noqa: BLE001
+                warn_no_backend("can_schedule_exact_notifications")
 
-    async def channel_groups(_):
-        await notifications.create_notification_channel_group("demo", "Demo group")
-        set_status("channel group 'demo' created")
+        page.run_task(_check)
 
-    channel_groups = backend_guard(channel_groups)
+    # ── Channels & styles ──
+    def create_channel(e):
+        guarded(
+            notifications.create_notification_channel(
+                NotificationChannel(
+                    id="alerts",
+                    name="Alerts",
+                    description="High-priority alerts",
+                )
+            ),
+            "create_notification_channel",
+        )
+
+    def list_channels(e):
+        async def _list():
+            try:
+                channels = await notifications.get_notification_channels()
+                log_line(f"channels: {[c.id for c in channels]}")
+            except Exception:  # noqa: BLE001
+                warn_no_backend("get_notification_channels")
+
+        page.run_task(_list)
+
+    def show_big_text(e):
+        guarded(
+            notifications.show(
+                id=5,
+                title="Long read",
+                body="Tap to expand.",
+                style=BigTextStyle(
+                    big_text="The quick brown fox jumps over the lazy dog. " * 3
+                ),
+            ),
+            "show",
+        )
+
+    def show_inbox(e):
+        guarded(
+            notifications.show(
+                id=6,
+                title="Inbox",
+                body="3 unread.",
+                style=InboxStyle(lines=["First", "Second", "Third"]),
+            ),
+            "show",
+        )
+
+    def show_progress(e):
+        guarded(
+            notifications.show(
+                id=7,
+                title="Downloading",
+                body="0%",
+                show_progress=True,
+                max_progress=4,
+                progress=1,
+            ),
+            "show",
+        )
+
+    def show_grouped(e):
+        guarded(
+            notifications.show(
+                id=8,
+                title="Summary",
+                body="Group summary.",
+                group_key="demo_group",
+                set_as_group_summary=True,
+            ),
+            "show",
+        )
+
+    def show_options(e):
+        guarded(
+            notifications.show(
+                id=9,
+                title="Silent alarm",
+                body="Full platform options.",
+                options=NotificationOptions(
+                    android=AndroidOptions(
+                        silent=True, category="alarm", visibility="public"
+                    ),
+                    iOS=DarwinOptions(interruption_level="passive"),
+                ),
+            ),
+            "show",
+        )
+
+    # ── Foreground service (Android) ──
+    def start_fgs(e):
+        guarded(
+            notifications.start_foreground_service(
+                id=10, title="Foreground service", body="Work in progress…"
+            ),
+            "start_foreground_service",
+        )
+
+    def stop_fgs(e):
+        guarded(notifications.stop_foreground_service(), "stop_foreground_service")
+
+    # ── Probes ──
+    def check_enabled(e):
+        async def _check():
+            try:
+                log_line(f"enabled: {await notifications.are_notifications_enabled()}")
+            except Exception:  # noqa: BLE001
+                warn_no_backend("are_notifications_enabled")
+
+        page.run_task(_check)
+
+    def open_settings(e):
+        guarded(
+            notifications.open_app_notification_settings(),
+            "open_app_notification_settings",
+        )
+
+    def list_active(e):
+        async def _list():
+            try:
+                active = await notifications.get_active_notifications()
+                log_line(f"active: {[a.id for a in active]}")
+            except Exception:  # noqa: BLE001
+                warn_no_backend("get_active_notifications")
+
+        page.run_task(_list)
+
+    def check_launch(e):
+        async def _check():
+            try:
+                details = await notifications.get_notification_app_launch_details()
+                log_line(
+                    f"launched by notification: {details.did_notification_launch_app}"
+                )
+            except Exception:  # noqa: BLE001
+                warn_no_backend("get_notification_app_launch_details")
+
+        page.run_task(_check)
+
+    def check_policy(e):
+        async def _check():
+            try:
+                granted = await notifications.has_notification_policy_access()
+                log_line(f"DND access: {granted}")
+                if not granted:
+                    await notifications.request_notification_policy_access()
+            except Exception:  # noqa: BLE001
+                warn_no_backend("has_notification_policy_access")
+
+        page.run_task(_check)
+
+    def channel_groups(e):
+        guarded(
+            notifications.create_notification_channel_group("demo", "Demo group"),
+            "create_notification_channel_group",
+        )
+
+    # ── Layout: sectioned buttons in one scrollable column ──
+    def section(title, buttons):
+        return [
+            ft.Text(title, weight=ft.FontWeight.BOLD),
+            *buttons,
+            ft.Divider(),
+        ]
 
     page.add(
-        ft.Text("flet-notifications", size=24, weight=ft.FontWeight.BOLD),
-        ft.Text(
-            "Notifications need a built app: `flet run` uses the prebuilt "
-            "client without extension code. Build with `flet build "
-            "<platform>` (or install a release artifact) to see notifications.",
-            size=12,
-            color=ft.Colors.ORANGE_400,
-        ),
-        status,
-        ft.Row(
-            [
-                ft.FilledButton("Request permissions", on_click=request_permissions),
-                ft.FilledButton("Show", on_click=show),
-                ft.FilledButton("Show with actions", on_click=show_with_actions),
-                ft.FilledButton("Cancel last", on_click=cancel),
-                ft.FilledButton("Cancel all", on_click=cancel_all),
+        ft.Column(
+            controls=[
+                *section(
+                    "Show",
+                    [
+                        ft.OutlinedButton(content="Show", on_click=show_plain),
+                        ft.OutlinedButton(
+                            content="Show with actions", on_click=show_actions
+                        ),
+                        ft.OutlinedButton(
+                            content="Request permissions", on_click=request_permissions
+                        ),
+                    ],
+                ),
+                *section(
+                    "Scheduling",
+                    [
+                        ft.OutlinedButton(
+                            content="Schedule in 10s", on_click=schedule_delayed
+                        ),
+                        ft.OutlinedButton(
+                            content="Schedule daily 08:30", on_click=schedule_daily
+                        ),
+                        ft.OutlinedButton(
+                            content="Schedule hourly", on_click=schedule_hourly
+                        ),
+                        ft.OutlinedButton(
+                            content="List pending", on_click=list_pending
+                        ),
+                        ft.OutlinedButton(
+                            content="Cancel pending", on_click=cancel_pending
+                        ),
+                        ft.OutlinedButton(
+                            content="Check exact alarms", on_click=check_exact
+                        ),
+                    ],
+                ),
+                *section(
+                    "Channels & styles",
+                    [
+                        ft.OutlinedButton(
+                            content="Create channel", on_click=create_channel
+                        ),
+                        ft.OutlinedButton(
+                            content="List channels", on_click=list_channels
+                        ),
+                        ft.OutlinedButton(
+                            content="Big text style", on_click=show_big_text
+                        ),
+                        ft.OutlinedButton(content="Inbox style", on_click=show_inbox),
+                        ft.OutlinedButton(content="Progress", on_click=show_progress),
+                        ft.OutlinedButton(content="Grouped", on_click=show_grouped),
+                        ft.OutlinedButton(
+                            content="Options (per-platform)", on_click=show_options
+                        ),
+                    ],
+                ),
+                *section(
+                    "Foreground service (Android)",
+                    [
+                        ft.OutlinedButton(
+                            content="Start foreground service", on_click=start_fgs
+                        ),
+                        ft.OutlinedButton(
+                            content="Stop foreground service", on_click=stop_fgs
+                        ),
+                    ],
+                ),
+                *section(
+                    "Probes",
+                    [
+                        ft.OutlinedButton(
+                            content="Are enabled", on_click=check_enabled
+                        ),
+                        ft.OutlinedButton(
+                            content="Open settings", on_click=open_settings
+                        ),
+                        ft.OutlinedButton(content="Active list", on_click=list_active),
+                        ft.OutlinedButton(
+                            content="Launch details", on_click=check_launch
+                        ),
+                        ft.OutlinedButton(content="DND access", on_click=check_policy),
+                        ft.OutlinedButton(
+                            content="Channel group", on_click=channel_groups
+                        ),
+                    ],
+                ),
+                ft.Text("Event log", weight=ft.FontWeight.BOLD),
+                log_terminal,
             ],
-            wrap=True,
             spacing=8,
-        ),
-        ft.Divider(),
-        ft.Row(
-            [
-                ft.FilledButton("Schedule in 10s", on_click=schedule_delayed),
-                ft.FilledButton("Schedule daily 08:30", on_click=schedule_daily),
-                ft.FilledButton("Schedule hourly", on_click=schedule_periodic),
-                ft.FilledButton("List pending", on_click=list_pending),
-                ft.FilledButton("Cancel pending", on_click=cancel_pending),
-                ft.FilledButton("Check exact alarms", on_click=check_exact_alarms),
-            ],
-            wrap=True,
-            spacing=8,
-        ),
-        ft.Row(
-            [
-                ft.FilledButton("Create channel", on_click=create_channel),
-                ft.FilledButton("List channels", on_click=list_channels),
-                ft.FilledButton("Big text style", on_click=show_big_text),
-                ft.FilledButton("Inbox style", on_click=show_inbox),
-                ft.FilledButton("Progress", on_click=show_progress),
-                ft.FilledButton("Grouped", on_click=show_grouped),
-                ft.FilledButton("Options", on_click=show_options),
-                ft.FilledButton("Start FGS", on_click=start_fgs),
-                ft.FilledButton("Stop FGS", on_click=stop_fgs),
-            ],
-            wrap=True,
-            spacing=8,
-        ),
-        ft.Row(
-            [
-                ft.FilledButton("Are enabled", on_click=check_enabled),
-                ft.FilledButton("Open settings", on_click=open_settings),
-                ft.FilledButton("Active list", on_click=list_active),
-                ft.FilledButton("Launch details", on_click=check_launch),
-                ft.FilledButton("DND access", on_click=check_policy),
-                ft.FilledButton("Channel group", on_click=channel_groups),
-            ],
-            wrap=True,
-            spacing=8,
-        ),
-        ft.Divider(),
-        ft.Text("Event log", weight=ft.FontWeight.BOLD),
-        log,
+        )
     )
 
 
-ft.run(main)
+if __name__ == "__main__":
+    ft.run(main)

@@ -25,10 +25,8 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/Nwokike/flet-notifications"
-Documentation = "https://github.com/Nwokike/flet-notifications#readme"
 Repository = "https://github.com/Nwokike/flet-notifications"
 Issues = "https://github.com/Nwokike/flet-notifications/issues"
-Changelog = "https://github.com/Nwokike/flet-notifications/blob/main/CHANGELOG.md"
 
 [project.scripts]
 flet-notifications-patch = "flet_notifications.patcher:main"
