@@ -453,7 +453,7 @@ void main() {
 
   test("get_pending returns JSON records", () async {
     plugin.pending.add(
-      fln.PendingNotificationRequest(3, "Pending", "Body", "p"),
+      const fln.PendingNotificationRequest(3, "Pending", "Body", "p"),
     );
     final service = _makeService();
     final result = await service.invokeMethod("get_pending", null);

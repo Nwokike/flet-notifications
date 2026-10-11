@@ -37,8 +37,10 @@ Map<String, Object?> responseToEvent(NotificationResponse response) {
     try {
       final decoded = jsonDecode(actionId);
       if (decoded is Map && decoded["id"] is String) {
+        // Windows returns the launch string as both actionId and payload;
+        // the envelope carries the real button id and payload.
         actionId = decoded["id"] as String;
-        if (payload.isEmpty && decoded["payload"] is String) {
+        if (decoded["payload"] is String) {
           payload = decoded["payload"] as String;
         }
       }
