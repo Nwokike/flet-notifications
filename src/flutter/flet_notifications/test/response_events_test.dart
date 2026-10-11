@@ -65,7 +65,7 @@ void main() {
 
   group("responseToEvent", () {
     test("plain tap", () {
-      const event = responseToEvent(_response(payload: "hello"));
+      final event = responseToEvent(_response(payload: "hello"));
       expect(event["id"], 7);
       expect(event["action_id"], "");
       expect(event["payload"], "hello");
@@ -98,7 +98,7 @@ void main() {
     });
 
     test("null payload and input become empty strings", () {
-      const event = responseToEvent(_response());
+      final event = responseToEvent(_response());
       expect(event["payload"], "");
       expect(event["input"], "");
     });
@@ -160,7 +160,7 @@ void main() {
   group("launch fingerprint dedupe", () {
     test("emits once per unique payload", () async {
       final prefs = await SharedPreferences.getInstance();
-      const event = responseToEvent(_response(payload: "hello"));
+      final event = responseToEvent(_response(payload: "hello"));
       expect(await shouldEmitLaunch(prefs, event), isTrue);
       expect(await shouldEmitLaunch(prefs, event), isFalse);
       final other = responseToEvent(_response(payload: "changed"));

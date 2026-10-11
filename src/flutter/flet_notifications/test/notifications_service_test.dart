@@ -697,7 +697,7 @@ void registerPhase3Tests() {
 
   test("get_notification_channels returns JSON", () async {
     plugin.channelsStored.add(
-      fln.AndroidNotificationChannel("alerts", "Alerts"),
+      const fln.AndroidNotificationChannel("alerts", "Alerts"),
     );
     final service = _makeService();
     final result = await service.invokeMethod(
@@ -753,7 +753,7 @@ void registerPhase3Tests() {
 
   test("get_active returns JSON records", () async {
     plugin.activeNotifications.add(
-      fln.ActiveNotification(
+      const fln.ActiveNotification(
         id: 3,
         channelId: "alerts",
         groupKey: "g",
