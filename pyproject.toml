@@ -1,6 +1,6 @@
 [project]
 name = "flet-notifications"
-version = "0.1.1"
+version = "0.1.2"
 description = "Cross-platform local notifications for Flet apps (Android, iOS, macOS, Windows, Linux, Web)."
 readme = "README.md"
 authors = [
