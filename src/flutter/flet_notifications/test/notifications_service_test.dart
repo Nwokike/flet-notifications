@@ -491,6 +491,30 @@ void main() {
   registerPhase3Tests();
 }
 
+/// Fake macOS platform implementation recording Darwin notification details.
+class _FakeMacOsPlugin extends fln.MacOSFlutterLocalNotificationsPlugin {
+  fln.DarwinNotificationDetails? shownDarwin;
+
+  @override
+  Future<bool?> initialize({
+    required fln.DarwinInitializationSettings settings,
+    fln.DidReceiveNotificationResponseCallback? onDidReceiveNotificationResponse,
+  }) async {
+    return true;
+  }
+
+  @override
+  Future<void> show({
+    required int id,
+    String? title,
+    String? body,
+    fln.DarwinNotificationDetails? notificationDetails,
+    String? payload,
+  }) async {
+    shownDarwin = notificationDetails;
+  }
+}
+
 // ── Phase 3: channels, styles, progress, foreground service ────────────
 
 class _ChannelRecordingPlugin extends _FakeAndroidPlugin {
@@ -528,6 +552,15 @@ class _ChannelRecordingPlugin extends _FakeAndroidPlugin {
     Set<fln.AndroidServiceForegroundType>? foregroundServiceTypes,
   }) async {
     foregroundStarts++;
+    lastStartType = startType;
+    lastForegroundServiceTypes = foregroundServiceTypes;
+  }
+
+  @override
+  Future<void> createNotificationChannelGroup(
+    fln.AndroidNotificationChannelGroup notificationChannelGroup,
+  ) async {
+    groupsCreated.add(notificationChannelGroup);
   }
 
   @override
@@ -538,6 +571,9 @@ class _ChannelRecordingPlugin extends _FakeAndroidPlugin {
   bool notificationsEnabled = true;
   int settingsOpened = 0;
   final List<fln.ActiveNotification> activeNotifications = [];
+  final List<fln.AndroidNotificationChannelGroup> groupsCreated = [];
+  fln.AndroidServiceStartType? lastStartType;
+  Set<fln.AndroidServiceForegroundType>? lastForegroundServiceTypes;
 
   @override
   Future<bool?> areNotificationsEnabled() async {
@@ -749,4 +785,143 @@ void registerPhase3Tests() {
     expect(result, startsWith("error:invalid_service_id:"));
   });
 });
+
+  // ── Options surface (per-platform details) ───────────────────────────
+
+  test("show applies AndroidOptions onto the details", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("show", {
+      "id": 1,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "style": null,
+      "channel_id": null,
+      "options": {
+        "android": {
+          "ongoing": true,
+          "silent": true,
+          "category": "alarm",
+          "importance": "high",
+          "priority": "max",
+          "color": "#FF0000",
+          "sub_text": "details",
+          "number": 4,
+          "visibility": "private",
+          "timeout_after": 60000,
+          "full_screen_intent": true,
+          "vibration_pattern": [0, 250, 100],
+          "play_sound": false,
+          "sound": "alert_tone",
+        },
+      },
+    });
+    expect(result, "ok");
+    final details =
+        plugin.shown.single["details"] as fln.AndroidNotificationDetails;
+    expect(details.ongoing, isTrue);
+    expect(details.silent, isTrue);
+    expect(details.category, fln.AndroidNotificationCategory.alarm);
+    expect(details.importance, fln.Importance.high);
+    expect(details.priority, fln.Priority.max);
+    expect(details.color, const Color(0xFFFF0000));
+    expect(details.subText, "details");
+    expect(details.number, 4);
+    expect(details.visibility, fln.NotificationVisibility.private);
+    expect(details.timeoutAfter, 60000);
+    expect(details.fullScreenIntent, isTrue);
+    expect(details.vibrationPattern!.toList(), [0, 250, 100]);
+    expect(details.playSound, isFalse);
+    expect(details.sound!.sound, "alert_tone");
+  });
+
+  test("show applies DarwinOptions on the macOS platform", () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final macos = _FakeMacOsPlugin();
+    fln.FlutterLocalNotificationsPlatform.instance = macos;
+    final service = _makeService();
+    final result = await service.invokeMethod("show", {
+      "id": 2,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "style": null,
+      "channel_id": null,
+      "options": {
+        "iOS": {
+          "badge_number": 3,
+          "subtitle": "sub",
+          "thread_identifier": "thread1",
+          "interruption_level": "passive",
+          "sound": "chime",
+        },
+        "macOS": {"badge_number": 1},
+      },
+    });
+    expect(result, "ok");
+    final details = macos.shownDarwin!;
+    expect(details.badgeNumber, 3);
+    expect(details.subtitle, "sub");
+    expect(details.threadIdentifier, "thread1");
+    expect(details.interruptionLevel, fln.InterruptionLevel.passive);
+    expect(details.sound, "chime");
+  });
+
+  test("unknown Android category surfaces as an error", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("show", {
+      "id": 3,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "style": null,
+      "channel_id": null,
+      "options": {
+        "android": {"category": "bogus"},
+      },
+    });
+    expect(result, startsWith("error:show_failed:"));
+    expect(plugin.shown, isEmpty);
+  });
+
+  test("foreground service forwards start type and service types",
+      () async {
+    final service = _makeService();
+    final result = await service.invokeMethod("start_foreground_service", {
+      "id": 4,
+      "title": "t",
+      "body": "b",
+      "payload": "",
+      "actions": null,
+      "style": null,
+      "channel_id": null,
+      "start_type": "startStickyForeground",
+      "foreground_service_types": ["dataSync", "specialUse"],
+    });
+    expect(result, "ok");
+    expect(plugin.foregroundStarts, 1);
+    expect(plugin.lastStartType, fln.AndroidServiceStartType.startStickyForeground);
+    expect(plugin.lastForegroundServiceTypes, {
+      fln.AndroidServiceForegroundType.dataSync,
+      fln.AndroidServiceForegroundType.specialUse,
+    });
+  });
+
+  test("channel group carries its description", () async {
+    final service = _makeService();
+    final result = await service.invokeMethod(
+      "create_notification_channel_group",
+      {
+        "group_id": "g",
+        "name": "G",
+        "description": "the description",
+      },
+    );
+    expect(result, "ok");
+    expect(plugin.groupsCreated.single.description, "the description");
+  });
 }
