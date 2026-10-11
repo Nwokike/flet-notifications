@@ -908,7 +908,7 @@ void registerPhase3Tests() {
       "actions": null,
       "style": null,
       "channel_id": null,
-      "start_type": "startStickyForeground",
+      "start_type": "startStickyCompatibility",
       "foreground_service_types": ["dataSync", "specialUse"],
     });
     expect(result, "ok");
