@@ -927,3 +927,4 @@ void registerPhase3Tests() {
     expect(plugin.groupsCreated.single.description, "the description");
   });
 });
+}
