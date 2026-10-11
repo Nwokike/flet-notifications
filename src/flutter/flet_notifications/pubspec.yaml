@@ -10,7 +10,7 @@ environment:
   flutter: ">=3.38.1"
 
 dependencies:
-  flet: ^1.0.0
+  flet: >=0.85.0
   flutter:
     sdk: flutter
   flutter_local_notifications: ^22.3.1
