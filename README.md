@@ -6,7 +6,7 @@
 
 Cross-platform local notifications for [Flet](https://flet.dev) apps.
 
-A 1:1 wrapping of the official [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications) Flutter plugin, in the same architecture as [flet-ads](https://pypi.org/project/flet-ads/). One `uv add flet-notifications` covers Android, iOS, macOS, Windows, Linux and Web — no Python dependencies beyond `flet` (works on Flet 0.85.0 and later, verified across the range).
+A 1:1 wrapping of the official [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications) Flutter plugin, in the same architecture as [flet-ads](https://pypi.org/project/flet-ads/). One `uv add flet-notifications` covers Android, iOS, macOS, Windows, Linux and Web — no Python dependencies beyond `flet` (verified on Flet 0.85.0 through 1.0.x in CI).
 
 ## Test it without an account
 
