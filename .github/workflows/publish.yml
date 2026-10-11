@@ -18,6 +18,8 @@ jobs:
         with:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@v6
+      - name: Sync Flutter package version
+        run: uv run python .github/scripts/sync_versions.py
       - name: Build wheel + sdist
         run: uv build
       - name: Publish to PyPI

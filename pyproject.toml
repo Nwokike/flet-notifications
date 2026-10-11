@@ -8,6 +8,7 @@ authors = [
 ]
 license = { text = "MIT" }
 requires-python = ">=3.10"
+keywords = ["flet", "notifications", "desktop", "android", "ios", "cross-platform"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",
@@ -24,14 +25,16 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/Nwokike/flet-notifications"
+Documentation = "https://github.com/Nwokike/flet-notifications#readme"
 Repository = "https://github.com/Nwokike/flet-notifications"
 Issues = "https://github.com/Nwokike/flet-notifications/issues"
+Changelog = "https://github.com/Nwokike/flet-notifications/blob/main/CHANGELOG.md"
 
 [project.scripts]
 flet-notifications-patch = "flet_notifications.patcher:main"
 
 [tool.setuptools.package-data]
-"flutter.flet_notifications" = ["**/*"]
+"flutter.flet_notifications" = ["pubspec.yaml", "lib/**"]
 
 [tool.setuptools]
 license-files = ["LICENSE"]

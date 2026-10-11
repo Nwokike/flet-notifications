@@ -101,7 +101,9 @@ jobs:
         with:
           python-version: '3.14'
       - name: Build extension wheel
-        run: uv build --wheel --out-dir wheels/ .
+        run: |
+          uv run python .github/scripts/sync_versions.py
+          uv build --wheel --out-dir wheels/ .
       - name: Build Windows portable
         working-directory: examples/flet_notifications_example
         env:
@@ -138,7 +140,9 @@ jobs:
           distribution: temurin
           java-version: 17
       - name: Build extension wheel
-        run: uv build --wheel --out-dir wheels/ .
+        run: |
+          uv run python .github/scripts/sync_versions.py
+          uv build --wheel --out-dir wheels/ .
       - name: First flet build pass (desugaring failure tolerated)
         working-directory: examples/flet_notifications_example
         env:
@@ -190,7 +194,9 @@ jobs:
           distribution: temurin
           java-version: 17
       - name: Build extension wheel
-        run: uv build --wheel --out-dir wheels/ .
+        run: |
+          uv run python .github/scripts/sync_versions.py
+          uv build --wheel --out-dir wheels/ .
       - name: First flet build pass (desugaring failure tolerated)
         working-directory: examples/flet_notifications_example
         env:
@@ -231,7 +237,9 @@ jobs:
         with:
           python-version: '3.14'
       - name: Build extension wheel
-        run: uv build --wheel --out-dir wheels/ .
+        run: |
+          uv run python .github/scripts/sync_versions.py
+          uv build --wheel --out-dir wheels/ .
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -280,7 +288,9 @@ jobs:
         with:
           python-version: '3.14'
       - name: Build extension wheel
-        run: uv build --wheel --out-dir wheels/ .
+        run: |
+          uv run python .github/scripts/sync_versions.py
+          uv build --wheel --out-dir wheels/ .
       - name: Build macOS app
         working-directory: examples/flet_notifications_example
         env:
@@ -316,7 +326,9 @@ jobs:
         with:
           python-version: '3.14'
       - name: Build extension wheel
-        run: uv build --wheel --out-dir wheels/ .
+        run: |
+          uv run python .github/scripts/sync_versions.py
+          uv build --wheel --out-dir wheels/ .
       - name: Build web bundle
         working-directory: examples/flet_notifications_example
         env:
