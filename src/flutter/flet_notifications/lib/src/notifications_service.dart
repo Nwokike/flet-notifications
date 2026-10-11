@@ -587,37 +587,37 @@ class LocalNotificationsService extends FletService {
       ),
       linux: fln.LinuxNotificationDetails(
         defaultActionName: "Open",
-        icon: linuxOptions["icon"] as String?,
-        sound: linuxOptions["sound"] == null
-            ? null
-            : fln.ThemeLinuxSound(linuxOptions["sound"] as String),
-        category: linuxOptions["category"] as String?,
+        icon: _mapLinuxIcon(linuxOptions["icon"] as String?),
+        sound: _mapLinuxSound(linuxOptions["sound"] as String?),
+        category: _mapLinuxCategory(linuxOptions["category"] as String?),
         urgency: _mapLinuxUrgency(linuxOptions["urgency"] as String?),
         timeout: linuxOptions["timeout_ms"] == null
             ? null
-            : fln.LinuxNotificationTimeout.custom(
+            : fln.LinuxNotificationTimeout.fromDuration(
               Duration(milliseconds: linuxOptions["timeout_ms"] as int),
             ),
         resident: optionalBool(linuxOptions["resident"]) ?? false,
         transient: optionalBool(linuxOptions["transient"]) ?? false,
         suppressSound: optionalBool(linuxOptions["suppress_sound"]) ?? false,
-        customHints: (linuxOptions["custom_hints"] as Map?)?.map(
-          (k, v) => MapEntry("$k", "$v"),
-        ),
+        customHints: _mapLinuxHints(linuxOptions["custom_hints"]),
         actionKeyAsIconName:
             optionalBool(linuxOptions["action_key_as_icon_name"]) ?? false,
       ),
       windows: fln.WindowsNotificationDetails(
         actions: windowsActions,
-        header: windowsOptions["header"] as String?,
-        audio: windowsOptions["audio"] as String?,
+        header: _mapWindowsHeader(windowsOptions["header"] as String?),
+        audio: _mapWindowsAudio(windowsOptions["audio"] as String?),
         duration: _mapWindowsDuration(windowsOptions["duration"] as String?),
         scenario: _mapWindowsScenario(windowsOptions["scenario"] as String?),
-        timestamp: windowsOptions["timestamp"] as int?,
+        timestamp: windowsOptions["timestamp"] == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(
+              windowsOptions["timestamp"] as int,
+            ),
         subtitle: windowsOptions["subtitle"] as String?,
         images:
             (windowsOptions["images"] as List?)
-                ?.map((e) => fln.WindowsImage("$e"))
+                ?.map((e) => fln.WindowsImage(Uri.parse("$e"), altText: ""))
                 .toList() ??
             const [],
         bindings: (windowsOptions["bindings"] as Map?)?.map(
@@ -644,15 +644,13 @@ class LocalNotificationsService extends FletService {
     return fln.RawResourceAndroidNotificationSound(sound);
   }
 
-  fln.AndroidIcon<Object>? _mapLargeIcon(String? source) {
+  /// Notification large icons accept bitmaps (drawable, file path or bytes).
+  fln.AndroidBitmap<Object>? _mapLargeIcon(String? source) {
     if (source == null || source.isEmpty) return null;
-    if (source.startsWith("content://")) {
-      return fln.ContentUriAndroidIcon(source);
-    }
     if (source.startsWith("/") || source.contains("\\")) {
-      return fln.BitmapFilePathAndroidIcon(source);
+      return fln.FilePathAndroidBitmap(source);
     }
-    return fln.DrawableResourceAndroidIcon(source);
+    return fln.DrawableResourceAndroidBitmap(source);
   }
 
   fln.DarwinNotificationDetails _mapDarwinDetails({
@@ -727,15 +725,70 @@ class LocalNotificationsService extends FletService {
     }
   }
 
-  fln.Urgency _mapLinuxUrgency(String? value) {
+  fln.LinuxNotificationIcon? _mapLinuxIcon(String? name) {
+    if (name == null || name.isEmpty) return null;
+    if (name.startsWith("/") || name.startsWith("file://")) {
+      return fln.FilePathLinuxIcon(name);
+    }
+    return fln.ThemeLinuxIcon(name);
+  }
+
+  fln.LinuxNotificationSound? _mapLinuxSound(String? name) {
+    if (name == null || name.isEmpty) return null;
+    return fln.ThemeLinuxSound(name);
+  }
+
+  fln.LinuxNotificationCategory? _mapLinuxCategory(String? value) {
+    if (value == null) return null;
+    for (final category in fln.LinuxNotificationCategory.values) {
+      if (category.name == value) return category;
+    }
+    throw FormatException("unknown Linux notification category: $value");
+  }
+
+  fln.LinuxNotificationUrgency? _mapLinuxUrgency(String? value) {
     switch (value) {
       case "low":
-        return fln.Urgency.low;
+        return fln.LinuxNotificationUrgency.low;
       case "critical":
-        return fln.Urgency.critical;
+        return fln.LinuxNotificationUrgency.critical;
       default:
-        return fln.Urgency.normal;
+        return fln.LinuxNotificationUrgency.normal;
     }
+  }
+
+  List<fln.LinuxNotificationCustomHint<dynamic>>? _mapLinuxHints(
+    Object? raw,
+  ) {
+    if (raw is! Map || raw.isEmpty) return null;
+    return raw.entries
+        .map((e) => fln.LinuxNotificationCustomHint<dynamic>(
+              name: "${e.key}",
+              value: e.value,
+            ))
+        .toList();
+  }
+
+  fln.WindowsHeader? _mapWindowsHeader(String? title) {
+    if (title == null || title.isEmpty) return null;
+    return fln.WindowsHeader(id: "header", title: title, arguments: "");
+  }
+
+  fln.WindowsNotificationAudio? _mapWindowsAudio(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value == "silent") return fln.WindowsNotificationAudio.silent();
+    const presets = {
+      "default": fln.WindowsNotificationSound.defaultSound,
+      "im": fln.WindowsNotificationSound.im,
+      "mail": fln.WindowsNotificationSound.mail,
+      "reminder": fln.WindowsNotificationSound.reminder,
+      "sms": fln.WindowsNotificationSound.sms,
+      "alarm": fln.WindowsNotificationSound.alarm,
+      "alarm2": fln.WindowsNotificationSound.alarm2,
+    };
+    return fln.WindowsNotificationAudio.preset(
+      sound: presets[value] ?? fln.WindowsNotificationSound.defaultSound,
+    );
   }
 
   fln.WindowsDuration? _mapWindowsDuration(String? value) {
