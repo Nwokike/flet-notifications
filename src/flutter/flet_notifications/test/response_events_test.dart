@@ -167,9 +167,8 @@ void main() {
       expect(await shouldEmitLaunch(prefs, other), isTrue);
     });
   });
-}
 
-// ── Windows normalization ─────────────────────────────────────────────
+  // ── Windows normalization ─────────────────────────────────────────────
 
 group("Windows response normalization", () {
   test("actionId envelope is unwrapped to the button id", () {
@@ -220,3 +219,4 @@ group("Windows response normalization", () {
     expect(event["input"], "");
   });
 });
+}

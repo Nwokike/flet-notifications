@@ -515,7 +515,7 @@ class LocalNotificationsService extends FletService {
       await _registerDarwinCategories(id, actions);
     }
 
-    final payloadForWindows = d["payload"] as String? ?? "";
+    final payloadForWindows = (details ?? const {})["payload"] as String? ?? "";
     final windowsActions =
         actions.map((a) {
           return fln.WindowsAction(
