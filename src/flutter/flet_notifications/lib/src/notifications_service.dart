@@ -22,6 +22,13 @@ import 'background_handler.dart';
 import 'parsers.dart';
 import 'scheduling.dart';
 
+/// Raised for invalid per-platform option values (bad category, …) so the
+/// invoke returns `invalid_option` rather than a generic `invalid_action`.
+class _InvalidOptionException implements Exception {
+  _InvalidOptionException(this.message);
+  final String message;
+}
+
 class LocalNotificationsService extends FletService {
   LocalNotificationsService({required super.control});
 
@@ -343,6 +350,8 @@ class LocalNotificationsService extends FletService {
         ),
       );
       return "ok";
+    } on _InvalidOptionException catch (e) {
+      return "error:invalid_option:${e.message}";
     } on FormatException catch (e) {
       return "error:invalid_action:${e.message}";
     } catch (e) {
@@ -1140,7 +1149,9 @@ class LocalNotificationsService extends FletService {
       case "workout":
         return fln.AndroidNotificationCategory.workout;
       default:
-        throw FormatException("unknown notification category: $value");
+        throw _InvalidOptionException(
+          "unknown notification category: $value",
+        );
     }
   }
 

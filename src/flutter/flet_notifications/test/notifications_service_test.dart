@@ -747,7 +747,7 @@ void registerPhase3Tests() {
 
   test("open_app_settings routes to the platform", () async {
     final service = _makeService();
-    expect(await service.invokeMethod("open_app_settings", null), "ok");
+    expect(await service.invokeMethod("open_app_settings", null), "true");
     expect(plugin.settingsOpened, 1);
   });
 
@@ -860,12 +860,19 @@ void registerPhase3Tests() {
           "interruption_level": "passive",
           "sound": "chime",
         },
-        "macOS": {"badge_number": 1},
+        "macOS": {
+          "badge_number": 1,
+          "subtitle": "sub",
+          "thread_identifier": "thread1",
+          "interruption_level": "passive",
+          "sound": "chime",
+        },
       },
     });
     expect(result, "ok");
+    // Running on macOS applies the *macOS* options (badge 1), not iOS's.
     final details = macos.shownDarwin!;
-    expect(details.badgeNumber, 3);
+    expect(details.badgeNumber, 1);
     expect(details.subtitle, "sub");
     expect(details.threadIdentifier, "thread1");
     expect(details.interruptionLevel, fln.InterruptionLevel.passive);
@@ -886,7 +893,7 @@ void registerPhase3Tests() {
         "android": {"category": "bogus"},
       },
     });
-    expect(result, startsWith("error:show_failed:"));
+    expect(result, startsWith("error:invalid_option:"));
     expect(plugin.shown, isEmpty);
   });
 

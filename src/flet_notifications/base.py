@@ -44,6 +44,7 @@ class NotificationErrorCode:
     INVALID_STYLE = "invalid_style"
     INVALID_CHANNEL = "invalid_channel"
     INVALID_SERVICE_ID = "invalid_service_id"
+    INVALID_OPTION = "invalid_option"
     CHANNEL_FAILED = "channel_failed"
     FOREGROUND_SERVICE_FAILED = "foreground_service_failed"
     QUERY_FAILED = "query_failed"

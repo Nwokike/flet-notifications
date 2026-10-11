@@ -277,7 +277,7 @@ Failures raise `NotificationError` with a stable ``code``:
 | `unsupported_platform` | The OS lacks the feature (e.g. scheduling on Linux/Web) |
 | `init_failed` | The notification backend could not initialize |
 | `show_failed` / `schedule_failed` | The OS rejected the notification |
-| `invalid_action` / `invalid_style` / `invalid_schedule` / `invalid_channel` / `invalid_service_id` | Bad configuration |
+| `invalid_action` / `invalid_style` / `invalid_schedule` / `invalid_channel` / `invalid_option` / `invalid_service_id` | Bad configuration |
 | `channel_failed` / `foreground_service_failed` | Android channel/service failure |
 | `query_failed` / `permission_failed` | Probe or permission failure |
 | `unknown_method` | No such invoke (a version mismatch between halves) |
