@@ -65,7 +65,7 @@ void main() {
 
   group("responseToEvent", () {
     test("plain tap", () {
-      final event = responseToEvent(_response(payload: "hello"));
+      const event = responseToEvent(_response(payload: "hello"));
       expect(event["id"], 7);
       expect(event["action_id"], "");
       expect(event["payload"], "hello");
@@ -98,7 +98,7 @@ void main() {
     });
 
     test("null payload and input become empty strings", () {
-      final event = responseToEvent(_response());
+      const event = responseToEvent(_response());
       expect(event["payload"], "");
       expect(event["input"], "");
     });
@@ -160,7 +160,7 @@ void main() {
   group("launch fingerprint dedupe", () {
     test("emits once per unique payload", () async {
       final prefs = await SharedPreferences.getInstance();
-      final event = responseToEvent(_response(payload: "hello"));
+      const event = responseToEvent(_response(payload: "hello"));
       expect(await shouldEmitLaunch(prefs, event), isTrue);
       expect(await shouldEmitLaunch(prefs, event), isFalse);
       final other = responseToEvent(_response(payload: "changed"));
@@ -174,7 +174,7 @@ group("Windows response normalization", () {
   test("actionId envelope is unwrapped to the button id", () {
     // The Windows plugin returns the launch string as both actionId and
     // payload; our Dart envelope carries id + payload as JSON.
-    final response = fln.NotificationResponse(
+    const response = fln.NotificationResponse(
       id: 7,
       actionId: '{"id": "reply", "payload": "actions"}',
       input: null,
@@ -191,7 +191,7 @@ group("Windows response normalization", () {
   });
 
   test("plain Android/Darwin action ids pass through untouched", () {
-    final response = fln.NotificationResponse(
+    const response = fln.NotificationResponse(
       id: 8,
       actionId: "reply",
       input: "typed text",
@@ -206,7 +206,7 @@ group("Windows response normalization", () {
   });
 
   test("Windows tap with no data keeps an empty input", () {
-    final response = fln.NotificationResponse(
+    const response = fln.NotificationResponse(
       id: 9,
       actionId: '',
       input: null,

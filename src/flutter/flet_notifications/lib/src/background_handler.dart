@@ -49,8 +49,8 @@ Map<String, Object?> responseToEvent(NotificationResponse response) {
   final normalizedInput =
       (input != null && input.isNotEmpty)
           ? input
-          : (response.data?.length == 1
-              ? response.data!.values.first.toString()
+          : (response.data.length == 1
+              ? response.data.values.first.toString()
               : "");
   return <String, Object?>{
     "id": response.id ?? -1,
