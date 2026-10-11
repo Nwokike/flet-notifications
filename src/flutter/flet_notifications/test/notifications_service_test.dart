@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:ui' show Color;
 
 import 'package:flet/flet.dart';
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride, TargetPlatform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
 import 'package:flutter_test/flutter_test.dart';
@@ -784,7 +787,6 @@ void registerPhase3Tests() {
     });
     expect(result, startsWith("error:invalid_service_id:"));
   });
-});
 
   // ── Options surface (per-platform details) ───────────────────────────
 
@@ -904,10 +906,10 @@ void registerPhase3Tests() {
     });
     expect(result, "ok");
     expect(plugin.foregroundStarts, 1);
-    expect(plugin.lastStartType, fln.AndroidServiceStartType.startStickyForeground);
+    expect(plugin.lastStartType, fln.AndroidServiceStartType.startStickyCompatibility);
     expect(plugin.lastForegroundServiceTypes, {
-      fln.AndroidServiceForegroundType.dataSync,
-      fln.AndroidServiceForegroundType.specialUse,
+      fln.AndroidServiceForegroundType.foregroundServiceTypeDataSync,
+      fln.AndroidServiceForegroundType.foregroundServiceTypeSpecialUse,
     });
   });
 
@@ -925,3 +927,4 @@ void registerPhase3Tests() {
     expect(plugin.groupsCreated.single.description, "the description");
   });
 }
+});
