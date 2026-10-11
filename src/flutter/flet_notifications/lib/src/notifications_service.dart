@@ -11,6 +11,8 @@ import 'package:flet/flet.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
+import 'package:flutter_local_notifications_linux/flutter_local_notifications_linux.dart'
+    as fln_linux;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // Mirrors the plugin's own example: the database lives in the data library
@@ -592,7 +594,7 @@ class LocalNotificationsService extends FletService {
         category: _mapLinuxCategory(linuxOptions["category"] as String?),
         urgency: _mapLinuxUrgency(linuxOptions["urgency"] as String?),
         timeout: linuxOptions["timeout_ms"] == null
-            ? null
+            ? const fln.LinuxNotificationTimeout.systemDefault()
             : fln.LinuxNotificationTimeout.fromDuration(
               Duration(milliseconds: linuxOptions["timeout_ms"] as int),
             ),
@@ -620,9 +622,11 @@ class LocalNotificationsService extends FletService {
                 ?.map((e) => fln.WindowsImage(Uri.parse("$e"), altText: ""))
                 .toList() ??
             const [],
-        bindings: (windowsOptions["bindings"] as Map?)?.map(
-          (k, v) => MapEntry("$k", "$v"),
-        ),
+        bindings:
+            (windowsOptions["bindings"] as Map?)?.map(
+              (k, v) => MapEntry("$k", "$v"),
+            ) ??
+            const {},
       ),
       web: const fln.WebNotificationDetails(),
     );
@@ -746,6 +750,18 @@ class LocalNotificationsService extends FletService {
     throw FormatException("unknown Linux notification category: $value");
   }
 
+  List<fln_linux.LinuxNotificationCustomHint<dynamic>>? _mapLinuxHints(
+    Object? raw,
+  ) {
+    if (raw is! Map || raw.isEmpty) return null;
+    return raw.entries
+        .map((e) => fln_linux.LinuxNotificationCustomHint<dynamic>(
+              name: "${e.key}",
+              value: e.value,
+            ))
+        .toList();
+  }
+
   fln.LinuxNotificationUrgency? _mapLinuxUrgency(String? value) {
     switch (value) {
       case "low":
@@ -755,18 +771,6 @@ class LocalNotificationsService extends FletService {
       default:
         return fln.LinuxNotificationUrgency.normal;
     }
-  }
-
-  List<fln.LinuxNotificationCustomHint<dynamic>>? _mapLinuxHints(
-    Object? raw,
-  ) {
-    if (raw is! Map || raw.isEmpty) return null;
-    return raw.entries
-        .map((e) => fln.LinuxNotificationCustomHint<dynamic>(
-              name: "${e.key}",
-              value: e.value,
-            ))
-        .toList();
   }
 
   fln.WindowsHeader? _mapWindowsHeader(String? title) {
@@ -783,35 +787,33 @@ class LocalNotificationsService extends FletService {
       "mail": fln.WindowsNotificationSound.mail,
       "reminder": fln.WindowsNotificationSound.reminder,
       "sms": fln.WindowsNotificationSound.sms,
-      "alarm": fln.WindowsNotificationSound.alarm,
-      "alarm2": fln.WindowsNotificationSound.alarm2,
     };
     return fln.WindowsNotificationAudio.preset(
       sound: presets[value] ?? fln.WindowsNotificationSound.defaultSound,
     );
   }
 
-  fln.WindowsDuration? _mapWindowsDuration(String? value) {
+  fln.WindowsNotificationDuration? _mapWindowsDuration(String? value) {
     switch (value) {
       case "long":
-        return fln.WindowsDuration.long;
+        return fln.WindowsNotificationDuration.long;
       case "short":
-        return fln.WindowsDuration.short;
+        return fln.WindowsNotificationDuration.short;
       default:
         return null;
     }
   }
 
-  fln.WindowsScenario? _mapWindowsScenario(String? value) {
+  fln.WindowsNotificationScenario? _mapWindowsScenario(String? value) {
     switch (value) {
       case "reminder":
-        return fln.WindowsScenario.reminder;
+        return fln.WindowsNotificationScenario.reminder;
       case "alarm":
-        return fln.WindowsScenario.alarm;
+        return fln.WindowsNotificationScenario.alarm;
       case "incomingCall":
-        return fln.WindowsScenario.incomingCall;
+        return fln.WindowsNotificationScenario.incomingCall;
       case "urgent":
-        return fln.WindowsScenario.urgent;
+        return fln.WindowsNotificationScenario.urgent;
       default:
         return null;
     }
@@ -1181,7 +1183,8 @@ class LocalNotificationsService extends FletService {
     return Int64List.fromList(value.map((e) => e as int).toList());
   }
 
-  Color? _parseHexColor(String hex) {
+  Color? _parseHexColor(String? hex) {
+    if (hex == null) return null;
     var v = hex.trim();
     if (!v.startsWith("#")) return null;
     v = v.substring(1);
