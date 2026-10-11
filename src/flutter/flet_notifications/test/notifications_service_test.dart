@@ -926,5 +926,4 @@ void registerPhase3Tests() {
     expect(result, "ok");
     expect(plugin.groupsCreated.single.description, "the description");
   });
-}
 });
