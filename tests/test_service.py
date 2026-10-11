@@ -32,14 +32,19 @@ def test_exports():
     assert fn.__all__ == [
         "ActiveNotification",
         "AndroidIcon",
+        "AndroidOptions",
         "AndroidScheduleMode",
         "BigPictureStyle",
         "BigTextStyle",
+        "DarwinOptions",
         "DateTimeComponents",
         "GroupAlertBehavior",
         "Importance",
         "InboxStyle",
+        "InterruptionLevel",
         "LaunchDetails",
+        "LinuxOptions",
+        "LinuxUrgency",
         "LocalNotifications",
         "Message",
         "MessagingStyle",
@@ -49,11 +54,17 @@ def test_exports():
         "NotificationError",
         "NotificationErrorCode",
         "NotificationEvent",
+        "NotificationOptions",
         "PendingNotification",
         "Person",
+        "Priority",
         "RepeatInterval",
         "ResponseType",
         "Style",
+        "Visibility",
+        "WebOptions",
+        "WindowsOptions",
+        "WindowsScenario",
     ]
     assert fn.__version__ == "0.1.0"
 
@@ -101,6 +112,7 @@ async def test_show_invokes_dart_with_wire_args():
         "set_as_group_summary": False,
         "group_alert_behavior": "all",
         "channel_id": None,
+        "options": None,
     }
 
 

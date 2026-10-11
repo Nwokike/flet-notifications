@@ -21,10 +21,10 @@ def build_schedule_args(
     body: str | None,
     payload: str,
     actions: list,
-    repeat_interval: RepeatInterval | None,
     match_components: DateTimeComponents | None,
     schedule_mode: AndroidScheduleMode,
     time_zone: str | None,
+    options: "object | None" = None,
     style: Style | None = None,
     show_progress: bool = False,
     max_progress: int = 0,
@@ -41,9 +41,6 @@ def build_schedule_args(
     device timezone when ``time_zone`` is None); aware datetimes carry their
     offset so the exact instant is preserved.
     """
-    if repeat_interval is not None and match_components is not None:
-        raise ValueError("repeat_interval and match_components are mutually exclusive")
-
     if isinstance(when, timedelta):
         when_payload: dict = {
             "delay_seconds": when.total_seconds(),
@@ -65,8 +62,8 @@ def build_schedule_args(
         "payload": payload,
         "actions": [a.to_dict() for a in actions] if actions else None,
         "when": when_payload,
-        "repeat_interval": repeat_interval.value if repeat_interval else None,
         "match_components": match_components.value if match_components else None,
+        "options": options.to_dict() if options else None,
         "schedule_mode": schedule_mode.value,
         "style": style.to_dict() if style else None,
         "show_progress": show_progress,
@@ -90,6 +87,7 @@ def build_periodic_args(
     actions: list,
     schedule_mode: AndroidScheduleMode,
     repeat_duration_seconds: int | None,
+    options: "object | None" = None,
     style: Style | None = None,
     show_progress: bool = False,
     max_progress: int = 0,
@@ -112,6 +110,7 @@ def build_periodic_args(
         "repeat_interval": repeat_interval.value,
         "schedule_mode": schedule_mode.value,
         "repeat_duration_seconds": repeat_duration_seconds,
+        "options": options.to_dict() if options else None,
         "style": style.to_dict() if style else None,
         "show_progress": show_progress,
         "max_progress": max_progress,

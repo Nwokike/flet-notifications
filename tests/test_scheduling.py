@@ -66,6 +66,7 @@ async def test_schedule_naive_datetime_with_timezone():
     }
     assert args["match_components"] == "time"
     assert args["schedule_mode"] == "exactAllowWhileIdle"
+    assert args["options"] is None
 
 
 async def test_schedule_aware_datetime_carries_offset():
@@ -88,15 +89,13 @@ async def test_schedule_timedelta_becomes_delay():
     }
 
 
-async def test_schedule_repeat_and_match_are_exclusive():
-    service = RecordingService()
-    with pytest.raises(ValueError, match="mutually exclusive"):
-        await service.schedule(
-            id=4,
-            when=datetime(2030, 1, 1, 8, 0),
-            repeat_interval=RepeatInterval.DAILY,
-            match_components=DateTimeComponents.TIME,
-        )
+def test_schedule_signature_has_no_repeat_interval():
+    import inspect
+
+    params = inspect.signature(LocalNotifications.schedule).parameters
+    assert "repeat_interval" not in params
+    assert "match_components" in params
+    assert "options" in params
 
 
 async def test_schedule_with_actions():
@@ -210,15 +209,14 @@ def test_build_schedule_args_defaults():
         body="b",
         payload="",
         actions=[],
-        repeat_interval=None,
         match_components=None,
         schedule_mode=AndroidScheduleMode.EXACT_ALLOW_WHILE_IDLE,
         time_zone=None,
     )
     assert args["actions"] is None
-    assert args["repeat_interval"] is None
     assert args["match_components"] is None
     assert args["schedule_mode"] == "exactAllowWhileIdle"
+    assert args["options"] is None
 
 
 # ── Phase 3: rich details forwarding ──────────────────────────────────

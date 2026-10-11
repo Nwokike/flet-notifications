@@ -167,14 +167,6 @@ def patch_gradle(gradle_path: Path) -> list[str]:
                 "manually"
             )
 
-    if "multiDexEnabled" not in text and "defaultConfig {" in text:
-        text = text.replace(
-            "defaultConfig {",
-            "defaultConfig {\n        multiDexEnabled = true",
-            1,
-        )
-        changed.append("multiDexEnabled")
-
     if changed:
         gradle_path.write_text(text, encoding="utf-8")
     for warning in warnings:

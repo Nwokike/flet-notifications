@@ -22,6 +22,7 @@ from flet_notifications.events import (
     LaunchDetails,
     PendingNotification,
 )
+from flet_notifications.options import NotificationOptions
 from flet_notifications.scheduling import (
     build_periodic_args,
     build_schedule_args,
@@ -115,10 +116,12 @@ class LocalNotifications(ft.Service):
         set_as_group_summary: bool,
         group_alert_behavior: GroupAlertBehavior,
         channel_id: Optional[str],
+        options: Optional[NotificationOptions] = None,
     ) -> dict:
         """Collect the style/progress/grouping kwargs (unserialized)."""
         return {
             "style": style,
+            "options": options,
             "show_progress": show_progress,
             "max_progress": max_progress,
             "progress": progress,
@@ -134,6 +137,7 @@ class LocalNotifications(ft.Service):
         """Convert details kwargs to JSON-ready wire form (for ``show``)."""
         out = dict(details)
         out["style"] = details["style"].to_dict() if details["style"] else None
+        out["options"] = details["options"].to_dict() if details["options"] else None
         out["group_alert_behavior"] = details["group_alert_behavior"].value
         return out
 
@@ -161,6 +165,7 @@ class LocalNotifications(ft.Service):
         set_as_group_summary: bool = False,
         group_alert_behavior: GroupAlertBehavior = GroupAlertBehavior.ALL,
         channel_id: Optional[str] = None,
+        options: Optional[NotificationOptions] = None,
     ) -> None:
         """Show a notification immediately.
 
@@ -198,6 +203,7 @@ class LocalNotifications(ft.Service):
                             set_as_group_summary,
                             group_alert_behavior,
                             channel_id,
+                            options,
                         )
                     ),
                 },
@@ -240,8 +246,8 @@ class LocalNotifications(ft.Service):
         body: Optional[str] = None,
         payload: str = "",
         actions: Optional[list[NotificationAction]] = None,
-        repeat_interval: Optional[RepeatInterval] = None,
         match_components: Optional[DateTimeComponents] = None,
+        options: Optional[NotificationOptions] = None,
         schedule_mode: AndroidScheduleMode = AndroidScheduleMode.EXACT_ALLOW_WHILE_IDLE,
         time_zone: Optional[str] = None,
         style: Optional[Style] = None,
@@ -264,9 +270,9 @@ class LocalNotifications(ft.Service):
             when: When to deliver — a ``datetime`` (naive values are
                 interpreted in ``time_zone`` or the device timezone) or a
                 ``timedelta`` from now.
-            repeat_interval: Repeat every minute/hour/day/week.
             match_components: Repeat on a calendar component (e.g. daily at
-                this time). Mutually exclusive with ``repeat_interval``.
+                this time); use :meth:`periodically_show` for interval
+                recurrence.
             schedule_mode: Android alarm exactness mode.
             time_zone: IANA timezone name for naive ``when`` and recurrence
                 (e.g. ``"Africa/Lagos"``); defaults to the device timezone.
@@ -287,7 +293,6 @@ class LocalNotifications(ft.Service):
                     body=body,
                     payload=payload,
                     actions=actions or [],
-                    repeat_interval=repeat_interval,
                     match_components=match_components,
                     schedule_mode=schedule_mode,
                     time_zone=time_zone,
@@ -301,6 +306,7 @@ class LocalNotifications(ft.Service):
                         set_as_group_summary,
                         group_alert_behavior,
                         channel_id,
+                        options,
                     ),
                 ),
             )
@@ -325,6 +331,7 @@ class LocalNotifications(ft.Service):
         set_as_group_summary: bool = False,
         group_alert_behavior: GroupAlertBehavior = GroupAlertBehavior.ALL,
         channel_id: Optional[str] = None,
+        options: Optional[NotificationOptions] = None,
     ) -> None:
         """Show a notification repeating at a fixed interval.
 
@@ -353,6 +360,7 @@ class LocalNotifications(ft.Service):
                         set_as_group_summary,
                         group_alert_behavior,
                         channel_id,
+                        options,
                     ),
                 ),
             )
@@ -460,6 +468,9 @@ class LocalNotifications(ft.Service):
         progress: int = 0,
         indeterminate: bool = False,
         channel_id: Optional[str] = None,
+        options: Optional[NotificationOptions] = None,
+        start_type: Optional[str] = None,
+        foreground_service_types: Optional[list[str]] = None,
     ) -> None:
         """Start a foreground service with a persistent notification.
 
@@ -476,6 +487,8 @@ class LocalNotifications(ft.Service):
                     "title": title,
                     "body": body,
                     "payload": payload,
+                    "start_type": start_type,
+                    "foreground_service_types": foreground_service_types,
                     "actions": [a.to_dict() for a in actions] if actions else None,
                     **self._serialize_details(
                         self._details_args(
@@ -488,6 +501,7 @@ class LocalNotifications(ft.Service):
                             False,
                             GroupAlertBehavior.ALL,
                             channel_id,
+                            options,
                         )
                     ),
                 },

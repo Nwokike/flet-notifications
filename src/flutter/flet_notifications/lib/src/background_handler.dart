@@ -41,6 +41,8 @@ Map<String, Object?> responseToEvent(NotificationResponse response) {
         : isAction
         ? "action"
         : "tap",
+    // Windows text/selection inputs arrive here (input is always null there).
+    "data": response.data,
   };
 }
 

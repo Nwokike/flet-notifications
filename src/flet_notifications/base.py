@@ -28,6 +28,8 @@ class NotificationEvent(ft.Event[ft.EventControlType]):
     payload: str = ""
     input: str = ""  # inline-reply text, when the action had an input
     response_type: str = ResponseType.TAP.value
+    # Windows action inputs arrive in the inherited `data` field, keyed by
+    # the input id (Windows leaves `input` null).
 
 
 class NotificationErrorCode:
