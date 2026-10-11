@@ -242,7 +242,6 @@ class LinuxOptions:
     resident: Optional[bool] = None
     transient: Optional[bool] = None
     suppress_sound: Optional[bool] = None
-    custom_hints: Optional[dict[str, str]] = None
     action_key_as_icon_name: Optional[bool] = None
 
     def to_dict(self) -> dict:
@@ -257,7 +256,6 @@ class LinuxOptions:
                 "resident": self.resident,
                 "transient": self.transient,
                 "suppress_sound": self.suppress_sound,
-                "custom_hints": dict(self.custom_hints) if self.custom_hints else None,
                 "action_key_as_icon_name": self.action_key_as_icon_name,
             }.items()
             if v is not None

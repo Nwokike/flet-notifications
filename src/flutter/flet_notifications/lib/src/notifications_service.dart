@@ -11,8 +11,6 @@ import 'package:flet/flet.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as fln;
-import 'package:flutter_local_notifications_linux/flutter_local_notifications_linux.dart'
-    as fln_linux;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // Mirrors the plugin's own example: the database lives in the data library
@@ -601,7 +599,6 @@ class LocalNotificationsService extends FletService {
         resident: optionalBool(linuxOptions["resident"]) ?? false,
         transient: optionalBool(linuxOptions["transient"]) ?? false,
         suppressSound: optionalBool(linuxOptions["suppress_sound"]) ?? false,
-        customHints: _mapLinuxHints(linuxOptions["custom_hints"]),
         actionKeyAsIconName:
             optionalBool(linuxOptions["action_key_as_icon_name"]) ?? false,
       ),
@@ -748,18 +745,6 @@ class LocalNotificationsService extends FletService {
       if (category.name == value) return category;
     }
     throw FormatException("unknown Linux notification category: $value");
-  }
-
-  List<fln_linux.LinuxNotificationCustomHint<dynamic>>? _mapLinuxHints(
-    Object? raw,
-  ) {
-    if (raw is! Map || raw.isEmpty) return null;
-    return raw.entries
-        .map((e) => fln_linux.LinuxNotificationCustomHint<dynamic>(
-              name: "${e.key}",
-              value: e.value,
-            ))
-        .toList();
   }
 
   fln.LinuxNotificationUrgency? _mapLinuxUrgency(String? value) {
@@ -1242,10 +1227,10 @@ class LocalNotificationsService extends FletService {
 
   fln.AndroidServiceStartType _mapServiceStartType(String? value) {
     switch (value) {
-      case "startForeground":
-        return fln.AndroidServiceStartType.startForeground;
-      case "startStickyForeground":
-        return fln.AndroidServiceStartType.startStickyForeground;
+      case "startStickyCompatibility":
+        return fln.AndroidServiceStartType.startStickyCompatibility;
+      case "startNotSticky":
+        return fln.AndroidServiceStartType.startNotSticky;
       case "startRedeliverIntent":
         return fln.AndroidServiceStartType.startRedeliverIntent;
       default:
@@ -1258,19 +1243,25 @@ class LocalNotificationsService extends FletService {
   ) {
     if (values == null || values.isEmpty) return null;
     const lookup = {
-      "camera": fln.AndroidServiceForegroundType.camera,
-      "connectedDevice": fln.AndroidServiceForegroundType.connectedDevice,
-      "dataSync": fln.AndroidServiceForegroundType.dataSync,
-      "health": fln.AndroidServiceForegroundType.health,
-      "location": fln.AndroidServiceForegroundType.location,
-      "mediaPlayback": fln.AndroidServiceForegroundType.mediaPlayback,
-      "mediaProjection": fln.AndroidServiceForegroundType.mediaProjection,
-      "microphone": fln.AndroidServiceForegroundType.microphone,
-      "phoneCall": fln.AndroidServiceForegroundType.phoneCall,
-      "remoteMessaging": fln.AndroidServiceForegroundType.remoteMessaging,
-      "shortService": fln.AndroidServiceForegroundType.shortService,
-      "specialUse": fln.AndroidServiceForegroundType.specialUse,
-      "systemExempted": fln.AndroidServiceForegroundType.systemExempted,
+      "camera": fln.AndroidServiceForegroundType.foregroundServiceTypeCamera,
+      "connectedDevice":
+          fln.AndroidServiceForegroundType.foregroundServiceTypeConnectedDevice,
+      "dataSync": fln.AndroidServiceForegroundType.foregroundServiceTypeDataSync,
+      "health": fln.AndroidServiceForegroundType.foregroundServiceTypeHealth,
+      "location": fln.AndroidServiceForegroundType.foregroundServiceTypeLocation,
+      "mediaPlayback":
+          fln.AndroidServiceForegroundType.foregroundServiceTypeMediaPlayback,
+      "mediaProjection":
+          fln.AndroidServiceForegroundType.foregroundServiceTypeMediaProjection,
+      "microphone": fln.AndroidServiceForegroundType.foregroundServiceTypeMicrophone,
+      "phoneCall": fln.AndroidServiceForegroundType.foregroundServiceTypePhoneCall,
+      "remoteMessaging":
+          fln.AndroidServiceForegroundType.foregroundServiceTypeRemoteMessaging,
+      "shortService":
+          fln.AndroidServiceForegroundType.foregroundServiceTypeShortService,
+      "specialUse": fln.AndroidServiceForegroundType.foregroundServiceTypeSpecialUse,
+      "systemExempted":
+          fln.AndroidServiceForegroundType.foregroundServiceTypeSystemExempted,
     };
     return values
         .map((v) => lookup["$v"])
