@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flet: ["1.0.0", "1.0.3", "latest"]
+        flet: ["1.0.0", "1.0.3", "1.0.4", "0.85.0", "latest"]
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4

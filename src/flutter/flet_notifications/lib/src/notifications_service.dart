@@ -515,12 +515,26 @@ class LocalNotificationsService extends FletService {
       await _registerDarwinCategories(id, actions);
     }
 
-    final windowsActions = actions
-        .map(
-          (a) => fln.WindowsAction(
+    final payloadForWindows = d["payload"] as String? ?? "";
+    final windowsActions =
+        actions.map((a) {
+          return fln.WindowsAction(
             content: a.title,
-            arguments: a.id,
+            arguments: jsonEncode({"id": a.id, "payload": payloadForWindows}),
+            inputId: a.input == null ? null : a.id,
             activationBehavior: fln.WindowsNotificationBehavior.dismiss,
+          );
+        }).toList();
+
+    // Windows renders inline replies as separate input elements; Android and
+    // Darwin put them on the action itself.
+    final windowsInputs = actions
+        .where((a) => a.input != null)
+        .map(
+          (a) => fln.WindowsTextInput(
+            id: a.id,
+            title: a.input!.label.isEmpty ? null : a.input!.label,
+            placeHolderContent: a.input!.label.isEmpty ? null : a.input!.label,
           ),
         )
         .toList();
@@ -613,6 +627,7 @@ class LocalNotificationsService extends FletService {
       ),
       windows: fln.WindowsNotificationDetails(
         actions: windowsActions,
+        inputs: windowsInputs,
         header: _mapWindowsHeader(windowsOptions["header"] as String?),
         audio: _mapWindowsAudio(windowsOptions["audio"] as String?),
         duration: _mapWindowsDuration(windowsOptions["duration"] as String?),

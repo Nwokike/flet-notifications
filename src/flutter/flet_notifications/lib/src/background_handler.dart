@@ -27,15 +27,36 @@ Map<String, Object?> responseToEvent(NotificationResponse response) {
   final isDismissed =
       response.notificationResponseType ==
       NotificationResponseType.notificationDismissed;
+  var input = response.input;
+  var actionId = isDismissed ? "" : isAction ? (response.actionId ?? "") : "";
+  var payload = response.payload ?? "";
+  // Windows returns the launch string (our JSON envelope) as both actionId
+  // and payload, and typed text in `data` (input always null there).
+  // Unwrap both so every platform yields the same event shape.
+  if (isAction && actionId.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(actionId);
+      if (decoded is Map && decoded["id"] is String) {
+        actionId = decoded["id"] as String;
+        if (payload.isEmpty && decoded["payload"] is String) {
+          payload = decoded["payload"] as String;
+        }
+      }
+    } on FormatException {
+      // Not our envelope: Android/Darwin/plain action ids pass through.
+    }
+  }
+  final normalizedInput =
+      (input != null && input.isNotEmpty)
+          ? input
+          : (response.data?.length == 1
+              ? response.data!.values.first.toString()
+              : "");
   return <String, Object?>{
     "id": response.id ?? -1,
-    "action_id": isDismissed
-        ? ""
-        : isAction
-        ? (response.actionId ?? "")
-        : "",
-    "payload": response.payload ?? "",
-    "input": response.input ?? "",
+    "action_id": actionId,
+    "payload": payload,
+    "input": normalizedInput,
     "response_type": isDismissed
         ? "dismissed"
         : isAction

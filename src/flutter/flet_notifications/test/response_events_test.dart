@@ -168,3 +168,55 @@ void main() {
     });
   });
 }
+
+// ── Windows normalization ─────────────────────────────────────────────
+
+group("Windows response normalization", () {
+  test("actionId envelope is unwrapped to the button id", () {
+    // The Windows plugin returns the launch string as both actionId and
+    // payload; our Dart envelope carries id + payload as JSON.
+    final response = fln.NotificationResponse(
+      id: 7,
+      actionId: '{"id": "reply", "payload": "actions"}',
+      input: null,
+      payload: '{"id": "reply", "payload": "actions"}',
+      notificationResponseType:
+          fln.NotificationResponseType.selectedNotificationAction,
+      data: {"reply": "typed on windows"},
+    );
+    final event = responseToEvent(response);
+    expect(event["action_id"], "reply");
+    expect(event["payload"], "actions");
+    expect(event["input"], "typed on windows"); // normalized from data
+    expect(event["response_type"], "action");
+  });
+
+  test("plain Android/Darwin action ids pass through untouched", () {
+    final response = fln.NotificationResponse(
+      id: 8,
+      actionId: "reply",
+      input: "typed text",
+      payload: "actions",
+      notificationResponseType:
+          fln.NotificationResponseType.selectedNotificationAction,
+    );
+    final event = responseToEvent(response);
+    expect(event["action_id"], "reply");
+    expect(event["input"], "typed text");
+    expect(event["payload"], "actions");
+  });
+
+  test("Windows tap with no data keeps an empty input", () {
+    final response = fln.NotificationResponse(
+      id: 9,
+      actionId: '',
+      input: null,
+      payload: '',
+      notificationResponseType:
+          fln.NotificationResponseType.selectedNotification,
+    );
+    final event = responseToEvent(response);
+    expect(event["response_type"], "tap");
+    expect(event["input"], "");
+  });
+});

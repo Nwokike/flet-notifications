@@ -66,7 +66,7 @@ def test_exports():
         "WindowsOptions",
         "WindowsScenario",
     ]
-    assert fn.__version__ == "0.1.0"
+    assert fn.__version__ == "0.1.1"
 
 
 def test_before_update_does_not_raise():
