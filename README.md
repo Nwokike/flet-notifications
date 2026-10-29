@@ -12,6 +12,10 @@ Cross-platform local notifications for [Flet](https://flet.dev) apps.
 
 A 1:1 wrapping of the official [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications) Flutter plugin. One `uv add flet-notifications` covers Android, iOS, macOS, Windows, Linux and Web — no Python dependencies beyond `flet` (verified on Flet 0.85.0 through 1.0.x in CI).
 
+## Documentation
+
+Detailed documentation to this package can be found [here](https://flet.dev/docs/services/notifications/).
+
 ## Test it first
 
 Every release builds the example app for every platform. Sideload any of them and every button is live:
